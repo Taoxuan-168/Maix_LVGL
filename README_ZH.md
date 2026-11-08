@@ -13,7 +13,7 @@ MaixCDK 的 LVGL 源码生成，`setup.py` 按 MaixPy 的方式打包 wheel。
 绑定生成参考并使用了 [PyDevices/omnipython-lvgl](https://github.com/PyDevices/omnipython-lvgl)
 的生成器（MIT 协议，已内置在 `tools/omnipython_lvgl/`）。
 
-预构建 wheel：[Releases](https://github.com/Taoxuan-168/maix_lvgl/releases)。
+预构建 wheel：[Releases](https://github.com/Taoxuan-168/Maix_LVGL/releases)。
 
 ## 快速开始
 

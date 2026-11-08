@@ -15,7 +15,7 @@ The binding is generated with the generator from
 [PyDevices/omnipython-lvgl](https://github.com/PyDevices/omnipython-lvgl)
 (MIT), vendored under `tools/omnipython_lvgl/`.
 
-Prebuilt wheel: [Releases](https://github.com/Taoxuan-168/maix_lvgl/releases).
+Prebuilt wheel: [Releases](https://github.com/Taoxuan-168/Maix_LVGL/releases).
 
 ## Quick start
 
