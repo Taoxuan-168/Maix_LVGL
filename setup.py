@@ -1,11 +1,16 @@
-"""Build the maix_lvgl wheel through MaixCDK's project.py.
+"""Build maix_lvgl wheels through MaixCDK's project.py.
 
-Like MaixPy, this is a standard MaixCDK project: ``main/`` is the entry
-component and ``components/lvgl_binding`` holds the LVGL CPython extension.
-``python3 setup.py bdist_wheel`` runs ``python project.py build -p maixcam2``
-so MaixCDK downloads and compiles its pinned LVGL together with the rest of
-the stack, then packages the resulting ``lvgl`` extension plus the
-``maix_lvgl`` Python package (and the non-system shared libraries it needs).
+Standard MaixCDK project layout: ``main/`` is the entry component and
+``components/lvgl_binding`` holds the LVGL CPython extension.
+
+Usage::
+
+    python3 setup.py bdist_wheel --board maixcam2   # default
+    python3 setup.py bdist_wheel --board maixcam    # RISC-V, Python 3.11
+
+``--board`` (or ``-b``, ``MAIX_BOARD``) selects the MaixCDK platform.  The
+MaixCAM build requires a host Python 3.11 (``python3.11 setup.py ...``); the
+MaixCAM2 build requires a host Python 3.13.
 """
 from __future__ import annotations
 
@@ -25,16 +30,83 @@ except ImportError:  # older setuptools
     from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 ROOT = Path(__file__).resolve().parent
-BOARD = "maixcam2"
-EXT_NAME = "lvgl.cpython-313-aarch64-linux-gnu.so"
+
+BOARD_INFO = {
+    "maixcam": {
+        "host_python": (3, 11),
+        "python_tag": "cp311",
+        "platform": "linux_riscv64",
+        # Python 3.11 on musl accepts the generic .so suffix.
+        "ext_name": "lvgl.so",
+        "config": "configs/config_platform_maixcam.mk",
+    },
+    "maixcam2": {
+        "host_python": (3, 13),
+        "python_tag": "cp313",
+        "platform": "manylinux2014_aarch64",
+        "ext_name": "lvgl.cpython-313-aarch64-linux-gnu.so",
+        "config": "configs/config_platform_maixcam2.mk",
+    },
+}
+
+
+def _extract_board(argv: list[str]) -> str:
+    """Consume --board/-b/--board= or a positional board from argv."""
+    board = os.environ.get("MAIX_BOARD", "maixcam2")
+    cleaned = []
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg in ("--board", "-b"):
+            if index + 1 >= len(argv):
+                raise SystemExit("--board requires maixcam or maixcam2")
+            board = argv[index + 1]
+            index += 2
+            continue
+        if arg.startswith("--board="):
+            board = arg.split("=", 1)[1]
+            index += 1
+            continue
+        if arg in BOARD_INFO:
+            board = arg
+            index += 1
+            continue
+        cleaned.append(arg)
+        index += 1
+    argv[:] = cleaned
+    if board not in BOARD_INFO:
+        raise SystemExit(
+            f"unknown board '{board}', expected one of: {', '.join(BOARD_INFO)}"
+        )
+    return board
+
+
+BOARD = _extract_board(sys.argv)
+BOARD_CFG = BOARD_INFO[BOARD]
+PY_TAG = BOARD_CFG["python_tag"]
+PLATFORM = BOARD_CFG["platform"]
+EXT_NAME = BOARD_CFG["ext_name"]
+CONFIG_FILE = BOARD_CFG["config"]
+HOST_PYTHON = BOARD_CFG["host_python"]
 BUILT_LIB = ROOT / "build" / "lvgl_binding" / "liblvgl_binding.so"
 BUILT_DL_LIB = ROOT / "build" / "dl_lib"
-PLATFORM = "manylinux2014_aarch64"
+BUILD_MARKER = ROOT / "build" / ".maix_lvgl_board"
 
 
 class BinaryDistribution(Distribution):
     def has_ext_modules(self):
         return True
+
+
+def _check_host_python():
+    required = HOST_PYTHON
+    if sys.version_info[:2] != required:
+        raise SystemExit(
+            f"{BOARD} requires host Python {required[0]}.{required[1]} "
+            f"(current: {sys.version_info.major}.{sys.version_info.minor}).\n"
+            f"Run: python{required[0]}.{required[1]} setup.py bdist_wheel "
+            f"--board {BOARD}"
+        )
 
 
 def _check_cmake():
@@ -45,9 +117,8 @@ def _check_cmake():
     match = re.search(r"version (\d+)\.", out)
     if match and int(match.group(1)) >= 4:
         print(
-            "-- WARNING: cmake 4.x is not compatible with some third-party "
-            "projects bundled by MaixCDK (e.g. freetype requires cmake >= 3.0). "
-            "Use cmake 3.x (e.g. 3.31) on PATH for this build.",
+            "-- NOTE: cmake 4.x is patched for freetype by "
+            "tools/patch_maixcdk.py; cmake 3.x is also supported.",
             file=sys.stderr,
         )
 
@@ -62,6 +133,27 @@ def _check_pycparser():
         )
 
 
+def _ensure_build_dir(skip_build: bool):
+    """Use one MaixCDK build directory per board; clean on board switch."""
+    current = None
+    if BUILD_MARKER.is_file():
+        try:
+            current = BUILD_MARKER.read_text(encoding="utf-8").strip()
+        except OSError:
+            current = None
+    if current == BOARD:
+        return
+    if skip_build:
+        raise SystemExit(
+            f"build/ was produced for {current or 'another board'}, not {BOARD}. "
+            "Run without --skip-build to rebuild."
+        )
+    if (ROOT / "build").exists():
+        shutil.rmtree(ROOT / "build")
+    BUILD_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    BUILD_MARKER.write_text(BOARD, encoding="utf-8")
+
+
 class MaixCDKBuildExt(build_ext):
     """Build through MaixCDK, then stage the extension for the wheel."""
 
@@ -73,8 +165,11 @@ class MaixCDKBuildExt(build_ext):
                     "Please set MAIXCDK_PATH to the MaixCDK checkout, e.g.\n"
                     "  export MAIXCDK_PATH=/path/to/MaixCDK"
                 )
+            _check_host_python()
             _check_cmake()
             _check_pycparser()
+            _ensure_build_dir(False)
+
             # The repository does not track generated binding files; create
             # them (from MaixCDK's LVGL source) before CMake configures.
             gen = [
@@ -96,6 +191,7 @@ class MaixCDKBuildExt(build_ext):
             ]
             print("-- generating API documentation")
             subprocess.check_call(docs, cwd=ROOT)
+
             cmd = [
                 sys.executable,
                 "project.py",
@@ -104,15 +200,17 @@ class MaixCDKBuildExt(build_ext):
                 BOARD,
                 "--release",
                 "--config-file",
-                f"configs/config_platform_{BOARD}.mk",
+                CONFIG_FILE,
             ]
             print("-- building with MaixCDK:", " ".join(cmd))
             subprocess.check_call(cmd, cwd=ROOT)
+        else:
+            _ensure_build_dir(True)
 
         if not BUILT_LIB.is_file():
             raise SystemExit(
                 f"MaixCDK build did not produce {BUILT_LIB}. "
-                "Run `python3 project.py build -p maixcam2 --release` to see why."
+                f"Run `python3 project.py build -p {BOARD} --release` to see why."
             )
 
         pkg_dir = Path(self.build_lib) / "maix_lvgl"
@@ -121,9 +219,6 @@ class MaixCDKBuildExt(build_ext):
 
         dl_dir = pkg_dir / "dl_lib"
         dl_dir.mkdir(exist_ok=True)
-        # libdatachannel is the only shared library in MaixCDK's dl_lib that
-        # MaixCAM2 firmware does not already provide; opencv/ffmpeg/AX/ssl are
-        # in the system search path.
         datachannel = BUILT_DL_LIB / "libdatachannel.so"
         if datachannel.is_file():
             shutil.copy2(datachannel, dl_dir / "libdatachannel.so")
@@ -135,14 +230,18 @@ class MaixLvglWheel(_bdist_wheel):
         if not getattr(self, "plat_name_supplied", False):
             self.plat_name = PLATFORM
             self.plat_name_supplied = True
+        # Force the target interpreter tag even when the host happens to be a
+        # different Python; the extension is cross-compiled for HOST_PYTHON.
+        self.python_tag = PY_TAG
+        self.abi_tag = PY_TAG
 
 
 setup(
     name="maix-lvgl",
     version="0.1.0",
     description=(
-        "LVGL bindings for MaixPy (MaixCAM2), generated from MaixCDK's LVGL "
-        "source with the omnipython-lvgl generator."
+        "LVGL bindings for MaixPy (MaixCAM / MaixCAM2), generated from "
+        "MaixCDK's LVGL source with the omnipython-lvgl generator."
     ),
     long_description=(ROOT / "README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",

@@ -299,19 +299,33 @@ LVGL 组件：MaixCDK 会自动下载其 Kconfig 固定的 LVGL（当前 9.1.0�
 
 ```bash
 export MAIXCDK_PATH=/path/to/MaixCDK
-python3 setup.py bdist_wheel
+
+# MaixCAM2（aarch64，Python 3.13）— 已在硬件测试
+python3 setup.py bdist_wheel --board maixcam2
+
+# MaixCAM（RISC-V，Python 3.11）— 未在硬件测试
+python3.11 setup.py bdist_wheel --board maixcam
 ```
+
+`--board` 也支持 `-b maixcam`、`--board=maixcam`、位置参数
+`maixcam`/`maixcam2`，或环境变量 `MAIX_BOARD`。默认是 `maixcam2`。
+
+> **MaixCAM 构建未测试。** `maixcam` wheel 的目标是
+> `cp311-linux_riscv64`，仅为完整性提供；只有 MaixCAM2 构建在硬件上验证过。
 
 流程：
 
-1. `setup.py` 调用 `python project.py build -p maixcam2 --release`（与 MaixPy
+1. `setup.py` 调用 `python project.py build -p <board> --release`（与 MaixPy
    的 `setup.py` 相同模式）。
 2. MaixCDK 下载其 LVGL 源码和依赖（首次构建）；`lvgl_binding` 组件的自定义
    目标在源码变化时从 MaixCDK 的 LVGL 重新生成 `binding/lvgl_python.c`。
 3. 组件用 MaixCDK 的交叉工具链编译，并链接 MaixCDK 的 `lvgl`、`python3`
    组件。
-4. 打包为 `cp313-manylinux2014_aarch64` wheel：`maix_lvgl/` 内包含
-   `__init__.py`、`driver.py`、`lvgl.cpython-313-aarch64-linux-gnu.so` 和
+4. 按目标平台打包：
+   - MaixCAM2：`cp313-manylinux2014_aarch64`，
+     `lvgl.cpython-313-aarch64-linux-gnu.so`
+   - MaixCAM：`cp311-linux_riscv64`，`lvgl.so`
+   两者都包含 `maix_lvgl/`（`__init__.py`、`driver.py`、扩展）和
    `dl_lib/libdatachannel.so`。
 
 构建时还会从 `binding/lvgl.pyi` 生成 MaixPy 风格的 API 文档到 `docs/api/`
@@ -329,22 +343,40 @@ python3 setup.py bdist_wheel
 git clone https://github.com/Taoxuan-168/Maix_LVGL.git
 cd Maix_LVGL
 export MAIXCDK_PATH=/path/to/MaixCDK
+
+# MaixCAM2（宿主 Python 3.13）
 python3 -m pip install 'pycparser>=3.0'
-python3 setup.py bdist_wheel
+python3 setup.py bdist_wheel --board maixcam2
+
+# MaixCAM（宿主 Python 3.11；未测试）
+python3.11 -m pip install --user 'pycparser>=3.0'
+python3.11 setup.py bdist_wheel --board maixcam
 ```
 
 构建会自动：
 
 - 首次使用时把 LVGL/freetype 下载到 MaixCDK；
-- 应用 `tools/patch_maixcdk.py`（启用 `LV_USE_FREETYPE` 并链接 freetype 组件）；
+- 应用 `tools/patch_maixcdk.py`（启用 `LV_USE_FREETYPE`、链接 freetype 组件，
+  并加入 CMake 4 兼容）；
 - 应用 `tools/patch_lvgl.py`（LVGL 9.1.0 observer/canvas 修复）；
 - 重新生成 `binding/lvgl_python.c` 和 `binding/lvgl.pyi`；
 - 编译并打包出 `dist/maix_lvgl-*.whl`。
 
-构建要求：带 MaixCAM2 工具链/Python 头文件的 MaixCDK（`dl/extracted` 下）、
+构建要求：带目标工具链/Python 头文件的 MaixCDK（`dl/extracted` 下）、
+**MaixCAM2 需要宿主 Python 3.13**、**MaixCAM 需要宿主 Python 3.11**、
 **cmake 3.x 或 4.x**（`tools/patch_maixcdk.py` 会为 freetype 传入
 `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` 以兼容 CMake 4）、`pycparser`
 （`pip install 'pycparser>=3.0'`）、宿主 `gcc`，以及首次下载依赖的网络。
+
+MaixCAM 构建还要求 `python3-config` 指向 Python 3.11。如果系统默认是其他
+版本，可把一个 3.11 的 bin 目录或小包装脚本放到 PATH 前面：
+
+```bash
+mkdir -p /tmp/py311-bin
+printf '#!/bin/sh\nexec /usr/bin/python3.11-config "$@"\n' > /tmp/py311-bin/python3-config
+chmod +x /tmp/py311-bin/python3-config
+PATH=/tmp/py311-bin:$PATH python3.11 setup.py bdist_wheel --board maixcam
+```
 
 绑定重新生成带缓存（`binding/.binding_stamp.json`），在 `project.py build`
 时自动执行。强制重生成：
@@ -355,10 +387,11 @@ python3 tools/regenerate_binding.py --force
 ./scripts/regenerate_binding.sh
 ```
 
-打包时复用已有 MaixCDK 构建可用：
+打包时复用已有 MaixCDK 构建可用；构建目录按板子跟踪，切换板子且不带
+`--skip-build` 会触发干净重编译：
 
 ```bash
-python3 setup.py bdist_wheel --skip-build
+python3 setup.py bdist_wheel --board maixcam2 --skip-build
 ```
 
 ## 配置说明

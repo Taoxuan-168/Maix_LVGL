@@ -308,21 +308,37 @@ the stack, and the binding links against that exact library.
 
 ```bash
 export MAIXCDK_PATH=/path/to/MaixCDK
-python3 setup.py bdist_wheel
+
+# MaixCAM2 (aarch64, Python 3.13) — tested on hardware
+python3 setup.py bdist_wheel --board maixcam2
+
+# MaixCAM (RISC-V, Python 3.11) — NOT tested on hardware
+python3.11 setup.py bdist_wheel --board maixcam
 ```
+
+`--board` also accepts `-b maixcam`, `--board=maixcam`, a positional
+`maixcam`/`maixcam2`, or the `MAIX_BOARD` environment variable.  The default
+is `maixcam2`.
+
+> **MaixCAM build is untested.**  The `maixcam` wheel targets
+> `cp311-linux_riscv64` and is provided for completeness; only the MaixCAM2
+> build has been verified on hardware.
 
 What happens:
 
-1. `setup.py` runs `python project.py build -p maixcam2 --release` (same
+1. `setup.py` runs `python project.py build -p <board> --release` (same
    pattern as MaixPy's `setup.py`).
 2. MaixCDK downloads its LVGL source and dependencies (first build), then the
    `lvgl_binding` component's custom target regenerates
    `binding/lvgl_python.c` from that source when it changed.
 3. The component compiles and links against MaixCDK's `lvgl` and `python3`
    components with MaixCDK's cross toolchain.
-4. The wheel is packaged as `cp313-manylinux2014_aarch64`:
-   `maix_lvgl/` contains `__init__.py`, `driver.py`,
-   `lvgl.cpython-313-aarch64-linux-gnu.so` and `dl_lib/libdatachannel.so`.
+4. The wheel is packaged with the target tag:
+   - MaixCAM2: `cp313-manylinux2014_aarch64`,
+     `lvgl.cpython-313-aarch64-linux-gnu.so`
+   - MaixCAM: `cp311-linux_riscv64`, `lvgl.so`
+   Both contain `maix_lvgl/` (`__init__.py`, `driver.py`, the extension) and
+   `dl_lib/libdatachannel.so`.
 
 The build also generates MaixPy-style API documentation from
 `binding/lvgl.pyi` into `docs/api/` (`api.json`, `config.json`, `README.md`,
@@ -340,24 +356,42 @@ Only tracked sources are required.  `binding/lvgl_python.c`, `binding/lvgl.pyi`,
 git clone https://github.com/Taoxuan-168/Maix_LVGL.git
 cd Maix_LVGL
 export MAIXCDK_PATH=/path/to/MaixCDK
+
+# MaixCAM2 (host Python 3.13)
 python3 -m pip install 'pycparser>=3.0'
-python3 setup.py bdist_wheel
+python3 setup.py bdist_wheel --board maixcam2
+
+# MaixCAM (host Python 3.11; untested)
+python3.11 -m pip install --user 'pycparser>=3.0'
+python3.11 setup.py bdist_wheel --board maixcam
 ```
 
 The build automatically:
 
 - downloads LVGL/freetype into MaixCDK on first use,
-- applies `tools/patch_maixcdk.py` (enables `LV_USE_FREETYPE` and links the
-  freetype component),
+- applies `tools/patch_maixcdk.py` (enables `LV_USE_FREETYPE`, links the
+  freetype component and adds CMake 4 compatibility),
 - applies `tools/patch_lvgl.py` (LVGL 9.1.0 observer/canvas fixes),
 - regenerates `binding/lvgl_python.c` and `binding/lvgl.pyi`,
 - builds and packages `dist/maix_lvgl-*.whl`.
 
-Build requirements: MaixCDK with MaixCAM2 toolchain/Python headers under
-`dl/extracted`, **cmake 3.x or 4.x** (`tools/patch_maixcdk.py` passes
-`-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to freetype for CMake 4),
-`pycparser` (`pip install 'pycparser>=3.0'`), host `gcc`, and network access
-for the first dependency download.
+Build requirements: MaixCDK with the target toolchain/Python headers under
+`dl/extracted`, **host Python 3.13 for MaixCAM2** and **host Python 3.11 for
+MaixCAM**, **cmake 3.x or 4.x** (`tools/patch_maixcdk.py` passes
+`-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to freetype for CMake 4), `pycparser`
+(`pip install 'pycparser>=3.0'`), host `gcc`, and network access for the
+first dependency download.
+
+For the MaixCAM build, `python3-config` must also resolve to Python 3.11.
+If your system default is another version, prepend a 3.11 bin directory or a
+small wrapper:
+
+```bash
+mkdir -p /tmp/py311-bin
+printf '#!/bin/sh\nexec /usr/bin/python3.11-config "$@"\n' > /tmp/py311-bin/python3-config
+chmod +x /tmp/py311-bin/python3-config
+PATH=/tmp/py311-bin:$PATH python3.11 setup.py bdist_wheel --board maixcam
+```
 
 Binding regeneration is cached in `binding/.binding_stamp.json` and runs
 automatically during `project.py build`. Force it with:
@@ -368,10 +402,12 @@ python3 tools/regenerate_binding.py --force
 ./scripts/regenerate_binding.sh
 ```
 
-`--skip-build` reuses the existing MaixCDK build when re-packaging:
+`--skip-build` reuses the existing MaixCDK build when re-packaging.  The
+build directory is tracked per board; switching boards without
+`--skip-build` triggers a clean rebuild:
 
 ```bash
-python3 setup.py bdist_wheel --skip-build
+python3 setup.py bdist_wheel --board maixcam2 --skip-build
 ```
 
 ## Configuration notes
