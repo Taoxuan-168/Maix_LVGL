@@ -717,6 +717,12 @@ void *mp_to_ptr(PyObject *obj)
         PyObject_TypeCheck(obj, &py_blob_type)) {
         return ((py_lv_struct_t *)obj)->data;
     }
+    if (PyObject_TypeCheck(obj, &py_lv_obj_type)) {
+        /* Widget wrappers keep their lv_obj_t pointer in lv_obj, not data.
+         * Accept them wherever LVGL APIs take void* (set_var, user_data,
+         * subject pointers, ...). */
+        return (void *)((py_lv_obj_t *)obj)->lv_obj;
+    }
     if (PyObject_CheckBuffer(obj)) {
         /* The pointer is only valid while the buffer is exported. Hold the
          * export in a memoryview until the outermost LVGL call returns, so

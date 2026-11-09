@@ -19,6 +19,8 @@ class PolicyRecord:
     name: str
     reason: str
     test: str
+    receiver: Optional[str] = None
+    python_name: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,8 @@ class PolicyDecision:
     visibility: str
     available_on: Tuple[str, ...] = TARGETS
     reason: Optional[str] = None
+    receiver: Optional[str] = None
+    python_name: Optional[str] = None
 
 
 class ApiPolicy:
@@ -53,6 +57,7 @@ class ApiPolicy:
         private_structs: Sequence[PolicyRecord] = (),
         private_enums: Sequence[PolicyRecord] = (),
         private_variables: Sequence[PolicyRecord] = (),
+        receiver_overrides: Sequence[PolicyRecord] = (),
         target_exceptions: Sequence[TargetException] = (),
     ) -> None:
         self.module_prefix = module_prefix
@@ -61,6 +66,7 @@ class ApiPolicy:
         private_structs = tuple(private_structs)
         private_enums = tuple(private_enums)
         private_variables = tuple(private_variables)
+        receiver_overrides = tuple(receiver_overrides)
         target_exceptions = tuple(target_exceptions)
         self.private_functions = {record.name: record for record in private_functions}
         self.unsupported_functions = {
@@ -69,6 +75,9 @@ class ApiPolicy:
         self.private_structs = {record.name: record for record in private_structs}
         self.private_enums = {record.name: record for record in private_enums}
         self.private_variables = {record.name: record for record in private_variables}
+        self.receiver_overrides = {
+            record.name: record for record in receiver_overrides
+        }
         self.target_exceptions = {
             (record.name, record.target): record
             for record in target_exceptions
@@ -89,6 +98,8 @@ class ApiPolicy:
             raise ValueError("duplicate private enum in API policy")
         if len(self.private_variables) != len(private_variables):
             raise ValueError("duplicate private variable in API policy")
+        if len(self.receiver_overrides) != len(receiver_overrides):
+            raise ValueError("duplicate receiver override in API policy")
         if len(self.target_exceptions) != len(target_exceptions):
             raise ValueError("duplicate target exception in API policy")
         self._validate()
@@ -106,6 +117,8 @@ class ApiPolicy:
                     name=item["name"],
                     reason=item["reason"],
                     test=item["test"],
+                    receiver=item.get("receiver"),
+                    python_name=item.get("python_name"),
                 )
                 for item in data.get(key, ())
             )
@@ -126,6 +139,7 @@ class ApiPolicy:
             private_structs=records("private_structs"),
             private_enums=records("private_enums"),
             private_variables=records("private_variables"),
+            receiver_overrides=records("receiver_overrides"),
             target_exceptions=exceptions,
         )
 
@@ -148,9 +162,16 @@ class ApiPolicy:
             self.private_structs.values()
         ) + tuple(
             self.private_enums.values()
-        ) + tuple(self.private_variables.values()):
+        ) + tuple(self.private_variables.values()) + tuple(
+            self.receiver_overrides.values()
+        ):
             if not record.reason or not record.test:
                 raise ValueError("API policy records require reason and test: %s" % record.name)
+        for record in self.receiver_overrides.values():
+            if not record.receiver:
+                raise ValueError(
+                    "receiver overrides require a receiver: %s" % record.name
+                )
         for record in self.target_exceptions.values():
             if not record.reason or not record.test:
                 raise ValueError(
@@ -166,9 +187,12 @@ class ApiPolicy:
             return PolicyDecision("private", reason=unsupported.reason)
         if not name.startswith(self.module_prefix + "_"):
             return PolicyDecision("private", reason="outside module prefix")
+        override = self.receiver_overrides.get(name)
         return PolicyDecision(
             "public",
             available_on=self._available_on(name),
+            receiver=override.receiver if override else None,
+            python_name=override.python_name if override else None,
         )
 
     def struct(self, names: Sequence[Optional[str]]) -> PolicyDecision:
@@ -258,6 +282,9 @@ def validate_policy_against_declarations(policy: ApiPolicy, declarations: Any) -
     for name in policy.private_variables:
         if name not in variable_names:
             missing.append("variable " + name)
+    for name in policy.receiver_overrides:
+        if name not in function_names:
+            missing.append("function " + name)
     for name, _target in policy.target_exceptions:
         if name not in function_names:
             missing.append("function " + name)

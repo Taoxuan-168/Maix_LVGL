@@ -910,6 +910,19 @@ def build_py_callback_arg(arg, index, func, py_var):
         raise MissingConversionException("Not a callback argument")
 
     callback_name, arg_type = callback
+    if func.name.endswith("_remove_event_cb") or func.name.endswith(
+        "_remove_event_cb_with_user_data"
+    ):
+        # Removal must pass the same trampoline that the matching
+        # add_event_cb registration stored, otherwise LVGL compares a new
+        # trampoline pointer and never finds the event.  The add trampoline
+        # is named after the add function (lv_obj_add_event_cb_...), not
+        # after the callback typedef.  pre_lv_call recovers the
+        # registration's callback dict from the descriptors.
+        owner = func.name.split("_remove_event_cb", 1)[0]
+        return "void *{name} = (void *)&{owner}_add_event_cb_event_cb_callback;".format(
+            name=fixed_arg.name, owner=owner
+        )
     args = func.type.args.params if func.type.args else []
     try:
         user_data_argument = False
@@ -1069,13 +1082,13 @@ def build_py_func_arg_line(arg, index, func, py_var):
         if not fixed_arg.name:
             fixed_arg.name = cname
             add_default_declname(fixed_arg, cname)
-        arg_type = get_type_fn(arg.type, remove_quals=True)
+        arg_type = get_type_fn(fixed_arg.type, remove_quals=True)
         # Same lazy registration as the generic path: populates lv_mp_type
         # (and the conversion tables) for this array type on first sight.
         conversion_available(
             conversions=mp_to_lv,
             type_name=arg_type,
-            generate_type=lambda: try_generate_type(arg.type),
+            generate_type=lambda: try_generate_type(fixed_arg.type),
         )
         arg_metadata = {"type": lv_mp_type[arg_type]}
         if cname:
@@ -1095,12 +1108,19 @@ def build_py_func_arg_line(arg, index, func, py_var):
         fixed_arg.name = cname
         add_default_declname(fixed_arg, cname)
 
-    arg_type = get_type_fn(arg.type, remove_quals=True)
+    # Use the array-to-pointer type when it has a registered element-wise
+    # array converter (mp_array_to_*).  Otherwise (const void * dsc[] and
+    # friends) keep the historical element-pointer conversion.
+    arg_type = get_type_fn(fixed_arg.type, remove_quals=True)
+    conversion_arg = fixed_arg.type
     elem = _const_struct_array_elem(arg, get_type_fn)
+    if elem is None and not (mp_to_lv.get(arg_type) or "").startswith("mp_array_to_"):
+        arg_type = get_type_fn(arg.type, remove_quals=True)
+        conversion_arg = arg.type
     if elem is not None and conversion_available(
         conversions=mp_to_lv,
         type_name=arg_type,
-        generate_type=lambda: try_generate_type(arg.type),
+        generate_type=lambda: try_generate_type(fixed_arg.type),
     ):
         # const lv_point_precise_t points[] and friends: a list of structs
         # (or dicts) becomes a C array, as on MicroPython; a buffer passes
@@ -1126,7 +1146,7 @@ def build_py_func_arg_line(arg, index, func, py_var):
     if not conversion_available(
         conversions=mp_to_lv,
         type_name=arg_type,
-        generate_type=lambda: try_generate_type(arg.type),
+        generate_type=lambda: try_generate_type(conversion_arg),
     ):
         raise MissingConversionException("Missing conversion to %s" % arg_type)
 
@@ -1249,12 +1269,20 @@ def gen_py_func(func, obj_name):
         build_return = "return %s(%s_res);" % (lv_to_mp[return_type], cast)
         allow_threads = func.name in ("lv_task_handler", "lv_tick_inc")
 
+    # Trust the canonical API model for receiver overrides: a function may
+    # be assigned to a receiver whose name is not a prefix of the C name
+    # (lv_menu_set_page_title -> menu_page).  get_methods(obj_name) reflects
+    # that decision, while is_method_of() only matches the C name prefix.
+    modeled_methods = (
+        {item.name for item in _h("get_methods")(obj_name)} if obj_name else set()
+    )
     is_method = (
         obj_name
         and not is_static_member(func, base_obj_type)
         and (
             is_method_of(func.name, obj_name)
             or _is_struct_method(func, obj_name, get_type_fn)
+            or func.name in modeled_methods
         )
     )
     struct_method = _is_struct_method(func, obj_name, get_type_fn)
@@ -1406,10 +1434,24 @@ def gen_py_func(func, obj_name):
     elif fname == "lv_anim_start":
         post_lv_call = "    lvpy_anim_bind(_res);"
     elif fname.endswith("_remove_event_cb_with_user_data"):
+        receiver = func.type.args.params[0].name or "obj"
+        kind = fname.split("_")[1]
+        pre_lv_call = (
+            "    user_data = lvpy_peek_%s_event_cb_user_data(%s, event_cb, NULL);"
+            % (kind, receiver)
+        )
         post_lv_call = "    if (_res > 0) lvpy_release_callback_user_data(user_data);"
     elif fname == "lv_obj_remove_event_cb":
         pre_lv_call = (
             "    void *_lvpy_release_ud = lvpy_peek_obj_event_cb_user_data(obj, event_cb, NULL);"
+        )
+        post_lv_call = "    if (_res) lvpy_release_callback_user_data(_lvpy_release_ud);"
+    elif fname.endswith("_remove_event_cb"):
+        receiver = func.type.args.params[0].name or "obj"
+        kind = fname.split("_")[1]
+        pre_lv_call = (
+            "    void *_lvpy_release_ud = lvpy_peek_%s_event_cb_user_data(%s, event_cb, NULL);"
+            % (kind, receiver)
         )
         post_lv_call = "    if (_res) lvpy_release_callback_user_data(_lvpy_release_ud);"
     elif fname == "lv_obj_remove_event_dsc":

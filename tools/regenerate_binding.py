@@ -199,6 +199,11 @@ def ensure_binding(force: bool = False, log=print, sdk_path=None):
     sdk = Path(sdk_path).resolve() if sdk_path else mk.find_maixcdk()
     version = mk.lvgl_version(sdk)
     lvgl_dir = mk.ensure_lvgl_source(sdk, version, log)
+    # LVGL 9.1.0 defects that the binding exposes (observer delete hook and
+    # canvas copy assertion).  Idempotent; also covers a fresh download.
+    import patch_lvgl
+
+    patch_lvgl.apply(lvgl_dir, log)
     conf = mk.lv_conf_path(sdk)
     inputs = mk.stamp(sdk, version, lvgl_dir, conf)
 

@@ -406,11 +406,14 @@ class CanonicalPyiEmitter:
                 ),
                 key=lambda item: (item["python_name"], item["c_name"]),
             ):
-                if function.get("static"):
-                    self._add("@staticmethod", 1)
-                    signature = self._signature(function, instance=False)
-                else:
-                    signature = self._signature(function, instance=True, skip_receiver=True)
+                # The generated C registers every object method in the
+                # type's method table, so CPython always passes an instance
+                # as self.  Methods the model marks static have C bodies
+                # that ignore self, but they are still called through an
+                # instance (image.src_get_type, image.decoder_create, ...).
+                # Emitting them as @staticmethod here would disagree with
+                # the runtime method table.
+                signature = self._signature(function, instance=True, skip_receiver=True)
                 override_note = ""
                 if function["python_name"] in self._inherited_method_names(object_name):
                     override_note = "  # type: ignore[override]"
@@ -486,9 +489,12 @@ class CanonicalPyiEmitter:
         type_aliases: Mapping[str, str] | None = None,
     ) -> str:
         parameters = list(function.get("parameters", ()))
-        if skip_receiver and not function.get("static"):
+        if skip_receiver:
             parameters = parameters[1:]
-        used = {"self"} if not constructor and not function.get("static") else set()
+        instance_method = not constructor and (
+            not function.get("static") or function.get("role") == "object_method"
+        )
+        used = {"self"} if instance_method else set()
         result = []
         for index, parameter in enumerate(parameters):
             name = _identifier(parameter.get("name") or "arg")

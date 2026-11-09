@@ -137,6 +137,88 @@ def deinit():
     _initialized = False
 
 
+def anim_set_exec_cb(anim, cb):
+    """Attach a Python callback to an animation.
+
+    LVGL's ``lv_anim_set_exec_cb`` takes a bare function pointer without a
+    user_data argument, so a Python callback cannot be associated with a
+    specific animation (the generated binding used to drop it silently).
+    This helper uses ``lv_anim_set_custom_exec_cb`` instead; the callback is
+    invoked as ``cb(anim, value)``, where the first argument is the
+    ``anim_t`` wrapper rather than the animation variable.
+    """
+    def _cb(a, value):
+        return cb(a, value)
+
+    anim.set_custom_exec_cb(_cb)
+
+
+class SYMBOL:
+    """LVGL built-in symbols (same names as lv.SYMBOL in MicroPython)."""
+
+    BULLET = "\u2022"
+    AUDIO = "\uf001"
+    VIDEO = "\uf008"
+    LIST = "\uf00b"
+    OK = "\uf00c"
+    CLOSE = "\uf00d"
+    POWER = "\uf011"
+    SETTINGS = "\uf013"
+    HOME = "\uf015"
+    DOWNLOAD = "\uf019"
+    DRIVE = "\uf01c"
+    REFRESH = "\uf021"
+    MUTE = "\uf026"
+    VOLUME_MID = "\uf027"
+    VOLUME_MAX = "\uf028"
+    IMAGE = "\uf03e"
+    TINT = "\uf043"
+    PREV = "\uf048"
+    PLAY = "\uf04b"
+    PAUSE = "\uf04c"
+    STOP = "\uf04d"
+    NEXT = "\uf051"
+    EJECT = "\uf052"
+    LEFT = "\uf053"
+    RIGHT = "\uf054"
+    PLUS = "\uf067"
+    MINUS = "\uf068"
+    EYE_OPEN = "\uf06e"
+    EYE_CLOSE = "\uf070"
+    WARNING = "\uf071"
+    SHUFFLE = "\uf074"
+    UP = "\uf077"
+    DOWN = "\uf078"
+    LOOP = "\uf079"
+    DIRECTORY = "\uf07b"
+    UPLOAD = "\uf093"
+    CALL = "\uf095"
+    CUT = "\uf0c4"
+    COPY = "\uf0c5"
+    SAVE = "\uf0c7"
+    BARS = "\uf0c9"
+    ENVELOPE = "\uf0e0"
+    CHARGE = "\uf0e7"
+    PASTE = "\uf0ea"
+    BELL = "\uf0f3"
+    KEYBOARD = "\uf11c"
+    GPS = "\uf124"
+    FILE = "\uf158"
+    WIFI = "\uf1eb"
+    BATTERY_FULL = "\uf240"
+    BATTERY_3 = "\uf241"
+    BATTERY_2 = "\uf242"
+    BATTERY_1 = "\uf243"
+    BATTERY_EMPTY = "\uf244"
+    USB = "\uf287"
+    BLUETOOTH = "\uf293"
+    TRASH = "\uf2ed"
+    EDIT = "\uf304"
+    BACKSPACE = "\uf55a"
+    SD_CARD = "\uf7c2"
+    NEW_LINE = "\uf8a2"
+
+
 # Re-export every LVGL binding name so ``import maix_lvgl as lv`` behaves like
 # ``import lvgl as lv`` (MicroPython-style API).
 def __getattr__(name):
@@ -153,4 +235,6 @@ __all__ = [n for n in dir(_lvgl) if not n.startswith("_")] + [
     "run",
     "process",
     "timer_handler",
+    "anim_set_exec_cb",
+    "SYMBOL",
 ]

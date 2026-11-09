@@ -48,6 +48,83 @@ finally:
     disp.close()
 ```
 
+
+## Feature showcase
+
+`examples/showcase.py` is a four-page interactive demo:
+
+| page | contents |
+| --- | --- |
+| Controls | buttons, switch, checkbox, slider, bar, arc, dropdown, roller, spinbox, LED |
+| Data | live sin/cos chart, table, calendar |
+| Input | textarea + on-screen keyboard, list, message box |
+| Canvas | direct canvas pixel drawing, property animation, spinner |
+
+Run it on the device, then use the on-screen **Exit** button (top-right):
+
+```bash
+python showcase.py
+```
+
+Screenshots: `examples/screenshots/{controls,data,input,canvas}.png`.
+
+With `MAIXPY_DEBUG_IMAGES=1` the demo auto-advances the pages, exits after
+12 seconds and writes `showcase_<tab>.png` into the skill run artifacts.
+
+
+## Debugging with AI (screen capture loop)
+
+`maix_lvgl` renders into a Python `bytearray` (`driver._buffer`, BGRA8888)
+and pushes the same bytes to `maix.display.Display`.  A script can therefore
+turn the exact frame the user sees into a PNG and hand it back to an assistant
+or a CI job:
+
+```python
+img = image.from_bytes(
+    driver.width, driver.height,
+    image.Format.FMT_BGRA8888,
+    bytes(driver._buffer), True,
+)
+img.save("/tmp/maixpy_skill/<run>/artifacts/frame.png")
+```
+
+`examples/showcase.py` implements this behind `MAIXPY_DEBUG_IMAGES=1` (the
+skill CLI sets it with `--debug-images`): it captures every 2 s, cycles
+through the four pages, and exits after 12 s.  Normal user runs never capture.
+
+### Run loop
+
+```bash
+python3 <skill>/scripts/maixpy_skill/cli.py run examples/showcase.py --debug-images
+```
+
+The CLI enters development mode, stops the launcher, runs the script on the
+device, then pulls the run directory back to `.maixpy/runs/<run_id>/`:
+
+| artifact | use |
+| --- | --- |
+| `stdout.log` / `stderr.log` | prints, tracebacks, crash output |
+| `summary.json` | `exit_code` (139 SIGSEGV, 135 SIGBUS, 124 timeout) |
+| `device-last-run.log` | full device log |
+| `artifacts/*.png` | exact LVGL frames, readable as images |
+
+### Pixel checks without a screenshot
+
+Tests can assert on the raw frame buffer:
+
+```python
+idx = (h // 2) * w * 4 + (w // 2) * 4
+b, g, r, a = driver._buffer[idx: idx + 4]
+assert (r, g, b) == (255, 0, 0)
+```
+
+### Notes
+
+- Capture code lives only in `examples/` and `tests/`; the wheel contains no
+  debug switches, debug symbols, or capture paths.
+- Real touch input still needs a person (or `send_event` for synthetic events).
+- Keep `--debug-images` out of final user-facing runs.
+
 ## Standard MaixCDK project layout
 
 ```
@@ -168,3 +245,32 @@ yourself.
   area.
 - **Display ownership**: only one `maix.display.Display` user at a time; stop
   the launcher/other apps before `lv.init()`.
+
+## Binding fixes (2026-11)
+
+The binding generator and runtime were fixed after an API sweep on MaixCAM2:
+
+- `menu_page.set_page_title()` / `set_page_title_static()` (previously bound to
+  `menu` and freed a bogus pointer).
+- `image_decoder_t.delete()`, `scale_section_t.set_range()`,
+  `image_src_get_type()`, `image_decoder_create()`, `image_cache_resize()`,
+  `image_header_cache_resize()`, `image_cache_drop()` and
+  `canvas_buf_size()` are now module-level functions where the C API is not a
+  receiver method.
+- `lv.ANIM_ENABLE`, `lv.SCREEN_LOAD_ANIM` and `lv.SYMBOL` are exported.
+- `anim_set_exec_cb(anim, cb)` is provided at the `maix_lvgl` module level
+  (LVGL's `lv_anim_set_exec_cb` has no user_data slot, so the raw binding is
+  private). The callback is called as `cb(anim, value)`; use
+  `anim.set_custom_exec_cb()` for the same behaviour directly.
+- `grid_dsc_array` accepts lists as well as `array.array`.
+- `remove_event_cb()` / `remove_event_cb_with_user_data()` now match the
+  trampoline used by `add_event_cb`.
+- `observer.remove()` no longer leaves a dangling `LV_EVENT_DELETE` hook
+  (LVGL 9.1.0 upstream fix, applied by `tools/patch_lvgl.py`).
+- `canvas.copy_buf()` no longer hangs on same-format copies (same upstream
+  fix).
+- `obj.set_user_data()` / `timer.set_user_data()` / `anim.set_var()` /
+  `subject.init_pointer()` accept widget objects; plain Python ints remain
+  unsupported because LVGL stores a `void *`.
+- `font.set_kerning()` is not exposed: built-in Montserrat fonts are const
+  data and writing them crashes.

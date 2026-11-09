@@ -30,6 +30,16 @@
       "name": "lv_tjpgd_init",
       "reason": "LV_USE_TJPGD is 0 on every target: the JPEG decoder is jpegio's, registered through lv_image_decoder_create by displayif (MicroPython), lvgl-circuitpython (CircuitPython) and lvgl-python (CPython); one TJpgDec per build (displayif#23, lvgl-bindings#14, lvgl-python#23).",
       "test": "tests/test_api_policy.py::test_tjpgd_is_private_on_every_target"
+    },
+    {
+      "name": "lv_font_set_kerning",
+      "reason": "Writes into lv_font_t; the built-in Montserrat fonts are const data and calling this segfaults.",
+      "test": "tests/suite_graphics.py::font_glyph"
+    },
+    {
+      "name": "lv_anim_set_exec_cb",
+      "reason": "lv_anim_exec_xcb_t has no user_data argument, so a Python callback cannot be associated with a specific animation. The generated binding dropped the callback (NULL). Use lv_anim_set_custom_exec_cb (or maix_lvgl.anim_set_exec_cb).",
+      "test": "tests/suite_core.py::anim_exec_cb"
     }
   ],
   "unsupported_functions": [
@@ -170,5 +180,21 @@
       "test": "tests/test_api_policy.py::test_internal_callback_hooks_are_not_public"
     }
   ],
-  "target_exceptions": []
+  "target_exceptions": [],
+  "receiver_overrides": [
+    {
+      "name": "lv_menu_set_page_title",
+      "receiver": "menu_page",
+      "python_name": "set_page_title",
+      "reason": "lv_menu_set_page_title takes a menu_page object as its first argument; the name prefix made the generator bind it to menu and free a bogus title pointer (SIGSEGV).",
+      "test": "tests/suite_widgets.py::menu"
+    },
+    {
+      "name": "lv_menu_set_page_title_static",
+      "receiver": "menu_page",
+      "python_name": "set_page_title_static",
+      "reason": "Same receiver mismatch as lv_menu_set_page_title.",
+      "test": "tests/suite_widgets.py::menu"
+    }
+  ]
 }

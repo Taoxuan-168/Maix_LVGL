@@ -956,21 +956,43 @@ def build_api_model(
                 name for name, c_name in constructors.items() if c_name == function.name
             )
         elif decision.visibility == "public":
-            matching_objects = sorted(
-                (
-                    object_name
-                    for object_name in constructors
-                    if plain.startswith(object_name + "_")
-                ),
-                key=len,
-                reverse=True,
-            )
-            if matching_objects:
+            if decision.receiver is not None:
+                if decision.receiver not in constructors:
+                    raise ValueError(
+                        "API policy receiver override names unknown object: %s"
+                        % decision.receiver
+                    )
                 role = "object_method"
-                receiver = matching_objects[0]
+                receiver = decision.receiver
                 object_methods[receiver].append(
-                    plain[len(receiver) + 1 :]
+                    decision.python_name or plain
                 )
+            else:
+                matching_objects = sorted(
+                    (
+                        object_name
+                        for object_name in constructors
+                        if plain.startswith(object_name + "_")
+                    ),
+                    key=len,
+                    reverse=True,
+                )
+                # A prefix match alone is not enough: lv_image_decoder_delete
+                # starts with image_ but its receiver is lv_image_decoder_t,
+                # and lv_scale_section_set_range starts with scale_ but its
+                # receiver is lv_scale_section_t.  Only classify as an object
+                # method when the first parameter is the base lv_obj_t (or an
+                # alias of it).
+                if matching_objects and _same_struct(
+                    index,
+                    index.first_argument_type_name(function.name),
+                    base_obj_type,
+                ):
+                    role = "object_method"
+                    receiver = matching_objects[0]
+                    object_methods[receiver].append(
+                        plain[len(receiver) + 1 :]
+                    )
         if role == "module" and function.name in struct_receivers:
             role = "struct_method"
             receiver = struct_receivers[function.name]
@@ -980,6 +1002,8 @@ def build_api_model(
                 python_name=(
                     "create"
                     if role == "constructor"
+                    else decision.python_name
+                    if decision.python_name
                     else _struct_method_name(
                         function.name, struct_c_receivers[function.name]
                     )

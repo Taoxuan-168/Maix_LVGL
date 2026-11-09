@@ -38,6 +38,40 @@ def emit_phase2_enums_cpython():
     enum_referenced = collections.OrderedDict()
     module_name = runtime.get("module_name", "lvgl")
 
+    # The legacy enum table keys enums by the common prefix of their C
+    # members (lv_anim_enable_t -> LV_ANIM), which drops the suffix that the
+    # canonical API model keeps (ANIM_ENABLE).  Add module-level aliases for
+    # public canonical enums whose members match an existing table entry, so
+    # lv.ANIM_ENABLE and lv.SCREEN_LOAD_ANIM exist at runtime.
+    api_model = runtime.get("api_model")
+    if api_model is not None:
+        existing_exports = {export_name(name, "enum") for name in enums}
+        for enum in api_model.enums:
+            canonical = enum.module_name
+            if (
+                not canonical
+                or enum.visibility != "public"
+                or canonical in existing_exports
+            ):
+                continue
+            wanted = {member for member, _value in enum.members}
+            for old_name, members in enums.items():
+                c_names = []
+                for value in members.values():
+                    if value.startswith("MP_ROM_INT(") and value.endswith(")"):
+                        c_names.append(value[len("MP_ROM_INT(") : -1])
+                if not c_names:
+                    continue
+                prefix = old_name + "_"
+                short = {
+                    name[len(prefix) :] if name.startswith(prefix) else name
+                    for name in c_names
+                }
+                if wanted <= short:
+                    enums[canonical] = members
+                    existing_exports.add(canonical)
+                    break
+
     print(
         """
 /*

@@ -524,7 +524,7 @@ class _Ids:
         return f"{heading} {_escape(name)} {{#{anchor}-{self.ids[key]['count']}}}"
 
 
-def module_to_md(full_name: str, module: dict, start_comment: str) -> str:
+def module_to_md(full_name: str, module: dict, start_comment: str, subpages=None) -> str:
     brief = module["doc"] if isinstance(module["doc"], str) else module["doc"].get("brief", "")
     content = f"---\ntitle: {full_name}\n---\n\n{brief}\n\n"
     content += start_comment
@@ -532,8 +532,6 @@ def module_to_md(full_name: str, module: dict, start_comment: str) -> str:
 
     def func_block(heading: str, name: str, item: dict) -> str:
         block = ids.update(heading, name) + "\n\n"
-        if item.get("py_def"):
-            block += f"```python\n{item['py_def']}\n```\n"
         block += item["doc"].get("brief", "") + "\n\n"
         if _has_doc_kv(item["doc"]):
             block += "| item | description |\n"
@@ -546,17 +544,22 @@ def module_to_md(full_name: str, module: dict, start_comment: str) -> str:
 
     # Module
     content += ids.update("##", "Module") + "\n\n"
-    submodules = [
-        (key, item)
-        for key, item in module["members"].items()
-        if item["type"] == "module"
-    ]
-    if submodules:
-        content += "| module | brief |\n| --- | --- |\n"
-        for key, item in submodules:
-            content += f"| [{_escape(key)}](./{key}.md) | {item['doc'].get('brief', '')} |\n"
+    if subpages:
+        content += "| page | brief |\n| --- | --- |\n"
+        for label, filename, brief in subpages:
+            content += f"| [{label}]({filename}) | {brief} |\n"
     else:
-        content += "No module\n"
+        submodules = [
+            (key, item)
+            for key, item in module["members"].items()
+            if item["type"] == "module"
+        ]
+        if submodules:
+            content += "| module | brief |\n| --- | --- |\n"
+            for key, item in submodules:
+                content += f"| [{_escape(key)}](./{key}.md) | {item['doc'].get('brief', '')} |\n"
+        else:
+            content += "No module\n"
     content += "\n\n"
 
     # Enum
@@ -568,9 +571,9 @@ def module_to_md(full_name: str, module: dict, start_comment: str) -> str:
         content += item["doc"].get("brief", "") + "\n\n"
         content += "| item | describe |\n| --- | --- |\n"
         content += _doc_table(item["doc"])
-        content += "| **values** | "
+        content += "| **values** | |\n| --- | --- |\n"
         for value in item["values"]:
-            content += f"**{value[0]}**: {value[2]}<br>"
+            content += f"| **{value[0]}** | {value[2]} |\n"
         content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n".format(
             _prefix(item.get("def", ""))
         )
@@ -614,26 +617,21 @@ def module_to_md(full_name: str, module: dict, start_comment: str) -> str:
         content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n\n".format(
             _prefix(item.get("def", ""))
         )
-        for member_key, member in item.get("members", {}).items():
-            content += ids.update("####", member_key) + "\n\n"
-            if member.get("py_def"):
-                content += f"```python\n{member['py_def']}\n```\n"
-            content += member["doc"].get("brief", "") + "\n\n"
-            content += "| item | description |\n| --- | --- |\n"
-            content += f"| **type** | {member['type']} |\n"
-            content += _doc_table(member["doc"])
-            content += f"| **static** | {member.get('static', False)} |\n"
-            if member["type"] == "var":
-                content += f"| **readonly** | {member.get('readonly', False)} |\n"
-            content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n".format(
-                _prefix(member.get("def", ""))
-            )
+        members = item.get("members", {})
+        if members:
+            content += "\n**Members**\n\n"
+            for member_key, member in members.items():
+                if member["type"] == "func":
+                    content += f"- `{_escape(member_key)}` — `{member.get('def', '')}`\n"
+                else:
+                    content += f"- `{_escape(member_key)}`: `{member.get('value', '')}`\n"
+            content += "\n"
         for nested in item.get("nested", []):
             content += ids.update("####", f"enum {nested['name']}", f"enum-{nested['name']}") + "\n\n"
             content += "| item | describe |\n| --- | --- |\n"
-            content += "| **values** | "
+            content += "| **values** | |\n| --- | --- |\n"
             for value in nested["values"]:
-                content += f"**{value[0]}**: {value[2]}<br>"
+                content += f"| **{value[0]}** | {value[2]} |\n"
             content += "\n"
     return content
 
@@ -646,36 +644,82 @@ def _start_comment(full_name: str) -> str:
     )
 
 
-def generate(pyi_path: Path, out_dir: Path) -> None:
+def generate(pyi_path: Path, out_dir: Path, merge: bool = False) -> None:
     classes, functions, variables = parse_pyi(pyi_path.read_text(encoding="utf-8"))
     api_tree = build_modules(classes, functions, variables)
 
-    # Clean generated files (keep any unrelated files in docs/api).
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("api.json", "config.json", "README.md", "README2.md", "sidebar.yaml"):
-        (out_dir / name).unlink(missing_ok=True)
     module_dir = out_dir / MODULE
     if module_dir.exists():
         shutil.rmtree(module_dir)
     module_dir.mkdir(parents=True)
+    if not merge:
+        for name in ("api.json", "config.json", "README.md", "README2.md", "sidebar.yaml"):
+            (out_dir / name).unlink(missing_ok=True)
 
     # api.json
-    (out_dir / "api.json").write_text(
-        json.dumps(api_tree, indent=4, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    api_path = out_dir / "api.json"
+    if merge and api_path.is_file():
+        try:
+            existing = json.loads(api_path.read_text(encoding="utf-8"))
+            existing.setdefault("members", {})[MODULE] = api_tree["members"][MODULE]
+            api_path.write_text(
+                json.dumps(existing, indent=4, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        except (OSError, json.JSONDecodeError):
+            api_path.write_text(
+                json.dumps(api_tree, indent=4, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+    else:
+        api_path.write_text(
+            json.dumps(api_tree, indent=4, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
 
-    # config.json
-    (out_dir / "config.json").write_text(
-        json.dumps({"import": "config_en", "name": "maix_lvgl API Reference"}, indent=4) + "\n",
-        encoding="utf-8",
-    )
+    # config.json (MaixPy's own is kept in merge mode)
+    config_path = out_dir / "config.json"
+    if not config_path.is_file():
+        config_path.write_text(
+            json.dumps({"import": "config_en", "name": "maix_lvgl API Reference"}, indent=4) + "\n",
+            encoding="utf-8",
+        )
 
-    # Module pages
+    # Module pages: split the large lvgl module into overview/functions/classes
     root = api_tree["members"][MODULE]
-    for name, module in root["members"].items():
-        full_name = f"{MODULE}.{name}"
-        content = module_to_md(full_name, module, _start_comment(full_name))
-        (module_dir / f"{name}.md").write_text(content, encoding="utf-8")
+    lvgl = root["members"]["lvgl"]
+
+    def subset(*types):
+        return {k: v for k, v in lvgl["members"].items() if v["type"] in types}
+
+    overview_subpages = [
+        ("functions", "lvgl_functions.md", "Function reference"),
+        ("classes", "lvgl_classes.md", "Class reference"),
+    ]
+    functions_subpages = [
+        ("lvgl", "lvgl.md", "Module overview, enums and variables"),
+        ("classes", "lvgl_classes.md", "Class reference"),
+    ]
+    classes_subpages = [
+        ("lvgl", "lvgl.md", "Module overview, enums and variables"),
+        ("functions", "lvgl_functions.md", "Function reference"),
+    ]
+    pages = [
+        ("lvgl.md", "maix_lvgl.lvgl", {**lvgl, "members": subset("enum", "var")}, overview_subpages),
+        ("lvgl_functions.md", "maix_lvgl.lvgl.functions", {**lvgl, "members": subset("func")}, functions_subpages),
+        ("lvgl_classes.md", "maix_lvgl.lvgl.classes", {**lvgl, "members": subset("class")}, classes_subpages),
+    ]
+    for filename, full_name, module, subpages in pages:
+        content = module_to_md(full_name, module, _start_comment(full_name), subpages)
+        (module_dir / filename).write_text(content, encoding="utf-8")
+
+    backend = root["members"]["maix_lvgl"]
+    backend_name = f"{MODULE}.maix_lvgl"
+    content = module_to_md(
+        backend_name, backend, _start_comment(backend_name)
+    )
+    (module_dir / "maix_lvgl.md").write_text(content, encoding="utf-8")
 
     # README (Brief)
     readme = (
@@ -694,19 +738,41 @@ def generate(pyi_path: Path, out_dir: Path) -> None:
     )
     for name, module in root["members"].items():
         readme += f"|[maix_lvgl.{name}](./{MODULE}/{name}.md) | {module['doc'].get('brief', '')} |\n"
-    (out_dir / "README.md").write_text(readme, encoding="utf-8")
+    readme_path = out_dir / "README.md"
+    if merge and readme_path.is_file():
+        existing = readme_path.read_text(encoding="utf-8")
+        if not existing.endswith("\n"):
+            existing += "\n"
+        rows = [
+            ("maix_lvgl.lvgl", f"./{MODULE}/lvgl.md",
+             "Module overview, enums and variables"),
+            ("maix_lvgl.lvgl.functions", f"./{MODULE}/lvgl_functions.md",
+             "LVGL module functions"),
+            ("maix_lvgl.lvgl.classes", f"./{MODULE}/lvgl_classes.md",
+             "LVGL widget and struct classes"),
+            ("maix_lvgl.maix_lvgl", f"./{MODULE}/maix_lvgl.md",
+             "maix_lvgl backend: display/touchscreen, init/deinit/run"),
+        ]
+        for key, path, brief in rows:
+            if key not in existing:
+                existing += f"|[{key}]({path}) | {brief} |\n"
+        readme_path.write_text(existing, encoding="utf-8")
+    else:
+        readme_path.write_text(readme, encoding="utf-8")
 
-    # README2 (offline note, MaixPy-style)
-    (out_dir / "README2.md").write_text(
-        "Where is the API docs?\n"
-        "=====\n\n"
-        "API docs is generated from `binding/lvgl.pyi` during the build and can be\n"
-        "read locally in `maix_lvgl/docs/api/`.\n\n"
-        "If you want to preview API doc offline, there are two ways:\n"
-        "1. Download the wheel from the [Releases page](https://github.com/Taoxuan-168/Maix_LVGL/releases).\n"
-        "2. Build maix_lvgl project; API doc is generated in `maix_lvgl/docs/api/`.\n",
-        encoding="utf-8",
-    )
+    # README2 (offline note; keep MaixPy's in merge mode)
+    readme2_path = out_dir / "README2.md"
+    if not (merge and readme2_path.is_file()):
+        readme2_path.write_text(
+            "Where is the API docs?\n"
+            "=====\n\n"
+            "API docs is generated from `binding/lvgl.pyi` during the build and can be\n"
+            "read locally in `maix_lvgl/docs/api/`.\n\n"
+            "If you want to preview API doc offline, there are two ways:\n"
+            "1. Download the wheel from the [Releases page](https://github.com/Taoxuan-168/Maix_LVGL/releases).\n"
+            "2. Build maix_lvgl project; API doc is generated in `maix_lvgl/docs/api/`.\n",
+            encoding="utf-8",
+        )
 
     # sidebar.yaml
     sidebar = (
@@ -723,7 +789,26 @@ def generate(pyi_path: Path, out_dir: Path) -> None:
             f"        label: {name}\n"
         )
     sidebar += "    label: maix_lvgl\n"
-    (out_dir / "sidebar.yaml").write_text(sidebar, encoding="utf-8")
+    sidebar_path = out_dir / "sidebar.yaml"
+    if merge and sidebar_path.is_file():
+        existing = sidebar_path.read_text(encoding="utf-8")
+        if "maix_lvgl/" not in existing:
+            if not existing.endswith("\n"):
+                existing += "\n"
+            existing += (
+                "-   collapsed: false\n"
+                "    items:\n"
+                "    -   collapsed: false\n"
+                f"        file: {MODULE}/lvgl.md\n"
+                "        label: lvgl\n"
+                "    -   collapsed: false\n"
+                f"        file: {MODULE}/maix_lvgl.md\n"
+                "        label: maix_lvgl\n"
+                "    label: maix_lvgl\n"
+            )
+            sidebar_path.write_text(existing, encoding="utf-8")
+    else:
+        sidebar_path.write_text(sidebar, encoding="utf-8")
 
     print(
         f"API docs: {out_dir} (modules {len(root['members'])}, "
@@ -737,8 +822,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pyi", default=str(ROOT / "binding" / "lvgl.pyi"))
     parser.add_argument("--out", default=str(ROOT / "docs" / "api"))
+    parser.add_argument("--merge", action="store_true", help="merge into an existing MaixPy docs/api")
     args = parser.parse_args()
-    generate(Path(args.pyi), Path(args.out))
+    generate(Path(args.pyi), Path(args.out), merge=args.merge)
 
 
 if __name__ == "__main__":

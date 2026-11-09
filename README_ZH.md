@@ -46,6 +46,82 @@ finally:
     disp.close()
 ```
 
+
+## 功能演示
+
+`examples/showcase.py` 是一个四页可交互演示：
+
+| 页面 | 内容 |
+| --- | --- |
+| Controls | 按钮、开关、复选框、滑块、进度条、圆弧、下拉框、滚轮、数字框、LED |
+| Data | 实时 sin/cos 曲线、表格、日历 |
+| Input | 文本框 + 屏幕键盘、列表、消息框 |
+| Canvas | canvas 逐像素绘制、属性动画、spinner |
+
+在设备上运行后，点击右上角 **Exit** 按钮退出：
+
+```bash
+python showcase.py
+```
+
+截图：`examples/screenshots/{controls,data,input,canvas}.png`。
+
+设置 `MAIXPY_DEBUG_IMAGES=1` 时，演示会自动切换页面、12 秒后退出，并把
+`showcase_<tab>.png` 写入 skill 运行目录的 artifacts。
+
+
+## 让 AI 看见调试信息（截图闭环）
+
+`maix_lvgl` 渲染到 Python `bytearray`（`driver._buffer`，BGRA8888），并把同一份
+字节推送到 `maix.display.Display`。因此脚本可以把用户看到的画面原样保存成 PNG，
+交给 AI 或 CI 查看：
+
+```python
+img = image.from_bytes(
+    driver.width, driver.height,
+    image.Format.FMT_BGRA8888,
+    bytes(driver._buffer), True,
+)
+img.save("/tmp/maixpy_skill/<run>/artifacts/frame.png")
+```
+
+`examples/showcase.py` 通过 `MAIXPY_DEBUG_IMAGES=1` 实现该逻辑（skill CLI 的
+`--debug-images` 会设置它）：每 2 秒截图、自动切换四个页面、12 秒后退出。
+正常用户运行不会截图。
+
+### 调试运行命令
+
+```bash
+python3 <skill>/scripts/maixpy_skill/cli.py run examples/showcase.py --debug-images
+```
+
+CLI 会自动进入开发模式、停止 launcher、在设备上运行脚本，然后把运行目录拉回
+`.maixpy/runs/<run_id>/`：
+
+| 产物 | 用途 |
+| --- | --- |
+| `stdout.log` / `stderr.log` | 打印输出、Python traceback、崩溃信息 |
+| `summary.json` | `exit_code`（139=SIGSEGV、135=SIGBUS、124=超时） |
+| `device-last-run.log` | 设备端完整日志 |
+| `artifacts/*.png` | LVGL 实际渲染画面，可直接作为图片读取 |
+
+### 不截图也能做像素校验
+
+测试可以直接读取帧缓冲：
+
+```python
+idx = (h // 2) * w * 4 + (w // 2) * 4
+b, g, r, a = driver._buffer[idx: idx + 4]
+assert (r, g, b) == (255, 0, 0)
+```
+
+### 说明
+
+- 截图代码只存在于 `examples/` 和 `tests/`；wheel 内没有调试开关、调试符号
+  或截图路径。
+- 真实触摸输入仍需要人工操作（或用 `send_event` 发送合成事件）。
+- 最终用户运行不要带 `--debug-images`。
+
 ## 标准 MaixCDK 工程结构
 
 ```
@@ -158,3 +234,28 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 - **点击目标**：触摸已验证，但控件本身要覆盖你实际触摸的区域。
 - **显示独占**：同一时间只能有一个 `maix.display.Display` 使用者，运行前需停止
   launcher 或其他应用。
+
+## 绑定修复（2026-11）
+
+在 MaixCAM2 上完成 API 全面测试后，修复了以下绑定问题：
+
+- `menu_page.set_page_title()` / `set_page_title_static()`（原先错误绑定到
+  `menu`，会释放野指针并崩溃）。
+- `image_decoder_t.delete()`、`scale_section_t.set_range()`、
+  `image_src_get_type()`、`image_decoder_create()`、`image_cache_resize()`、
+  `image_header_cache_resize()`、`image_cache_drop()`、`canvas_buf_size()`
+  按 C API 语义改为模块级函数。
+- 导出 `lv.ANIM_ENABLE`、`lv.SCREEN_LOAD_ANIM` 和 `lv.SYMBOL`。
+- 在 `maix_lvgl` 模块级提供 `anim_set_exec_cb(anim, cb)`（LVGL 的
+  `lv_anim_set_exec_cb` 没有 user_data 参数，原始绑定已隐藏）。回调形式为
+  `cb(anim, value)`；也可直接使用 `anim.set_custom_exec_cb()`。
+- `grid_dsc_array` 同时接受 list 和 `array.array`。
+- `remove_event_cb()` / `remove_event_cb_with_user_data()` 使用与
+  `add_event_cb` 相同的 trampoline，可正确匹配。
+- `observer.remove()` 不再遗留悬空的 `LV_EVENT_DELETE` 钩子（LVGL 9.1.0
+  上游修复，由 `tools/patch_lvgl.py` 应用）。
+- `canvas.copy_buf()` 同色格式复制不再死循环（同一上游修复）。
+- `obj.set_user_data()` / `timer.set_user_data()` / `anim.set_var()` /
+  `subject.init_pointer()` 支持传入 widget 对象；纯 Python int 仍不支持，
+  因为 LVGL 保存的是 `void *`。
+- 不再暴露 `font.set_kerning()`：内置 Montserrat 字体是只读数据，写入会崩溃。
