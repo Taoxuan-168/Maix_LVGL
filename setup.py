@@ -85,6 +85,17 @@ class MaixCDKBuildExt(build_ext):
             ]
             print("-- generating LVGL binding from MaixCDK source")
             subprocess.check_call(gen, cwd=ROOT)
+
+            docs = [
+                sys.executable,
+                str(ROOT / "tools" / "gen_api_docs.py"),
+                "--pyi",
+                str(ROOT / "binding" / "lvgl.pyi"),
+                "--out",
+                str(ROOT / "docs" / "api" / "maix_lvgl"),
+            ]
+            print("-- generating API documentation")
+            subprocess.check_call(docs, cwd=ROOT)
             cmd = [
                 sys.executable,
                 "project.py",

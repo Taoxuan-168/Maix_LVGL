@@ -93,6 +93,11 @@ python3 setup.py bdist_wheel
    `__init__.py`、`driver.py`、`lvgl.cpython-313-aarch64-linux-gnu.so` 和
    `dl_lib/libdatachannel.so`。
 
+构建时还会从 `binding/lvgl.pyi` 生成 Markdown API 文档到
+`docs/api/maix_lvgl/`（与 MaixPy 的 `components/maix/gen_api.py` →
+`docs/api/maix` 相同的构建时流程）；生成物不纳入 git，可单独运行
+`python3 tools/gen_api_docs.py` 重新生成。
+
 构建要求：带 MaixCAM2 工具链/Python 头文件的 MaixCDK（`dl/extracted` 下）、
 **cmake 3.x**（MaixCDK 的 freetype 子工程不兼容 cmake 4）、`pycparser`
 （`pip install 'pycparser>=3.0'`）、宿主 `gcc`，以及首次下载依赖的网络。
