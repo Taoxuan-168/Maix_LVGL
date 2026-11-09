@@ -77,28 +77,98 @@ With `MAIXPY_DEBUG_IMAGES=1` the demo auto-advances the pages, exits after
 
 LVGL's built-in Montserrat fonts only cover Latin.  The build enables
 `LV_USE_FREETYPE` (see `tools/patch_maixcdk.py`) and links MaixCDK's
-`freetype` component, so device fonts can be loaded at runtime:
+`freetype` component, so device fonts can be loaded at runtime.
+
+Complete example (run on the device):
 
 ```python
-font = lv.freetype_font_create(
-    "/maixapp/share/font/SourceHanSansCN-Regular.otf",
-    0,      # LV_FREETYPE_FONT_RENDER_MODE_BITMAP
-    24,     # pixel size
-    0,      # LV_FREETYPE_FONT_STYLE_NORMAL
-)
-label = lv.label(lv.screen_active())
-label.set_text("你好，MaixCAM2！")
-label.set_style_text_font(font, 0)
-# ... run lv.timer_handler() ...
-label.delete()
-font.freetype_font_delete()
+import time
+
+from maix import app, display, touchscreen
+
+import maix_lvgl as lv
+
+FONT = "/maixapp/share/font/SourceHanSansCN-Regular.otf"
+
+
+def main():
+    disp = display.Display()
+    ts = touchscreen.TouchScreen()
+    running = [True]
+    font = None
+    try:
+        lv.init(disp, ts)
+        scr = lv.screen_active()
+        scr.set_style_bg_color(lv.color_hex(0x101018), 0)
+        scr.set_style_bg_opa(lv.OPA.COVER, 0)
+
+        # lv_init() already initializes FreeType, and lv_deinit() cleans it
+        # up.  Do not call lv.freetype_init()/lv.freetype_uninit() manually.
+        font = lv.freetype_font_create(
+            FONT,
+            0,      # LV_FREETYPE_FONT_RENDER_MODE_BITMAP
+            24,     # pixel size
+            0,      # LV_FREETYPE_FONT_STYLE_NORMAL
+        )
+        if font is None:
+            raise RuntimeError("cannot load " + FONT)
+
+        title = lv.label(scr)
+        title.set_text("你好，MaixCAM2！")
+        title.set_style_text_font(font, 0)
+        title.set_style_text_color(lv.color_hex(0xFFFFFF), 0)
+        title.set_pos(20, 20)
+
+        body = lv.label(scr)
+        body.set_text(
+            "这是 LVGL FreeType 渲染的中文。\n"
+            "汉字：你好世界\n"
+            "标点：，。！？：；（）\n"
+            "混合：LVGL 9.1 中文 123"
+        )
+        body.set_style_text_font(font, 0)
+        body.set_style_text_color(lv.color_hex(0x9CA3AF), 0)
+        body.set_pos(20, 70)
+
+        def on_exit(event):
+            running[0] = False
+
+        button = lv.button(scr)
+        button.set_pos(20, 230)
+        button.set_size(120, 44)
+        button.add_event_cb(on_exit, lv.EVENT.CLICKED, None)
+        button_label = lv.label(button)
+        button_label.set_text("退出")
+        button_label.set_style_text_font(font, 0)
+        button_label.center()
+
+        while not app.need_exit() and running[0]:
+            lv.timer_handler()
+            time.sleep(0.005)
+
+        # Delete widgets that use the font first, then the font itself.
+        button.delete()
+        body.delete()
+        title.delete()
+        font.freetype_font_delete()
+        font = None
+    finally:
+        if font is not None:
+            font.freetype_font_delete()
+        lv.deinit()
+        ts.close()
+        disp.close()
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 Notes:
 
-- `lv_init()` already initializes FreeType and `lv_deinit()` cleans it up.
-  Do not call `lv.freetype_init()` / `lv.freetype_uninit()` yourself;
-  double cleanup makes `lv_deinit()` hang.
+- `lv_init()` initializes FreeType and `lv_deinit()` cleans it up.  Calling
+  `lv.freetype_init()` / `lv.freetype_uninit()` manually and then `lv.deinit()`
+  makes cleanup run twice and can hang.
 - Delete widgets that use the font before `font.freetype_font_delete()`.
 - The Source Han font is ~8.3 MB; create it on demand.  The glyph cache is
   `LV_FREETYPE_CACHE_SIZE` (768 KB by default).
