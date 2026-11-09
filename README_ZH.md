@@ -70,6 +70,37 @@ python showcase.py
 `showcase_<tab>.png` 写入 skill 运行目录的 artifacts。
 
 
+
+## 使用 FreeType 显示中文
+
+LVGL 内置的 Montserrat 字体只覆盖拉丁字符。构建时会启用 `LV_USE_FREETYPE`
+（见 `tools/patch_maixcdk.py`）并链接 MaixCDK 的 `freetype` 组件，因此可以在
+运行时加载设备字体：
+
+```python
+font = lv.freetype_font_create(
+    "/maixapp/share/font/SourceHanSansCN-Regular.otf",
+    0,      # LV_FREETYPE_FONT_RENDER_MODE_BITMAP
+    24,     # 像素高度
+    0,      # LV_FREETYPE_FONT_STYLE_NORMAL
+)
+label = lv.label(lv.screen_active())
+label.set_text("你好，MaixCAM2！")
+label.set_style_text_font(font, 0)
+# ... 运行 lv.timer_handler() ...
+label.delete()
+font.freetype_font_delete()
+```
+
+说明：
+
+- `lv_init()` 已经初始化 FreeType，`lv_deinit()` 会自动清理。不要再手动调用
+  `lv.freetype_init()` / `lv.freetype_uninit()`，重复清理会让 `lv_deinit()` 挂起。
+- 先删除使用该字体的控件，再调用 `font.freetype_font_delete()`。
+- 思源黑体约 8.3 MB，按需创建；字形缓存由 `LV_FREETYPE_CACHE_SIZE`
+  控制（默认 768 KB）。
+- 截图：`examples/screenshots/cjk_font.png`。
+
 ## 让 AI 看见调试信息（截图闭环）
 
 `maix_lvgl` 渲染到 Python `bytearray`（`driver._buffer`，BGRA8888），并把同一份
@@ -175,8 +206,30 @@ python3 setup.py bdist_wheel
 `components/maix/gen_api.py` → `docs/api/maix` 采用相同的构建时流程；
 生成物不纳入 git，可单独运行 `python3 tools/gen_api_docs.py` 重新生成。
 
+### 新手 clone / 干净构建
+
+仓库只包含源码；`binding/lvgl_python.c`、`binding/lvgl.pyi`、
+`binding/lv_conf.h`、`build/`、`dist/`、`docs/api/` 都是构建时生成的：
+
+```bash
+git clone https://github.com/Taoxuan-168/Maix_LVGL.git
+cd Maix_LVGL
+export MAIXCDK_PATH=/path/to/MaixCDK
+python3 -m pip install 'pycparser>=3.0'
+python3 setup.py bdist_wheel
+```
+
+构建会自动：
+
+- 首次使用时把 LVGL/freetype 下载到 MaixCDK；
+- 应用 `tools/patch_maixcdk.py`（启用 `LV_USE_FREETYPE` 并链接 freetype 组件）；
+- 应用 `tools/patch_lvgl.py`（LVGL 9.1.0 observer/canvas 修复）；
+- 重新生成 `binding/lvgl_python.c` 和 `binding/lvgl.pyi`；
+- 编译并打包出 `dist/maix_lvgl-*.whl`。
+
 构建要求：带 MaixCAM2 工具链/Python 头文件的 MaixCDK（`dl/extracted` 下）、
-**cmake 3.x**（MaixCDK 的 freetype 子工程不兼容 cmake 4）、`pycparser`
+**cmake 3.x 或 4.x**（`tools/patch_maixcdk.py` 会为 freetype 传入
+`-DCMAKE_POLICY_VERSION_MINIMUM=3.5` 以兼容 CMake 4）、`pycparser`
 （`pip install 'pycparser>=3.0'`）、宿主 `gcc`，以及首次下载依赖的网络。
 
 绑定重新生成带缓存（`binding/.binding_stamp.json`），在 `project.py build`

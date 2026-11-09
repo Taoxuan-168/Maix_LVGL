@@ -72,6 +72,38 @@ With `MAIXPY_DEBUG_IMAGES=1` the demo auto-advances the pages, exits after
 12 seconds and writes `showcase_<tab>.png` into the skill run artifacts.
 
 
+
+## Chinese text with FreeType
+
+LVGL's built-in Montserrat fonts only cover Latin.  The build enables
+`LV_USE_FREETYPE` (see `tools/patch_maixcdk.py`) and links MaixCDK's
+`freetype` component, so device fonts can be loaded at runtime:
+
+```python
+font = lv.freetype_font_create(
+    "/maixapp/share/font/SourceHanSansCN-Regular.otf",
+    0,      # LV_FREETYPE_FONT_RENDER_MODE_BITMAP
+    24,     # pixel size
+    0,      # LV_FREETYPE_FONT_STYLE_NORMAL
+)
+label = lv.label(lv.screen_active())
+label.set_text("你好，MaixCAM2！")
+label.set_style_text_font(font, 0)
+# ... run lv.timer_handler() ...
+label.delete()
+font.freetype_font_delete()
+```
+
+Notes:
+
+- `lv_init()` already initializes FreeType and `lv_deinit()` cleans it up.
+  Do not call `lv.freetype_init()` / `lv.freetype_uninit()` yourself;
+  double cleanup makes `lv_deinit()` hang.
+- Delete widgets that use the font before `font.freetype_font_delete()`.
+- The Source Han font is ~8.3 MB; create it on demand.  The glyph cache is
+  `LV_FREETYPE_CACHE_SIZE` (768 KB by default).
+- Screenshot: `examples/screenshots/cjk_font.png`.
+
 ## Debugging with AI (screen capture loop)
 
 `maix_lvgl` renders into a Python `bytearray` (`driver._buffer`, BGRA8888)
@@ -181,8 +213,31 @@ build-time flow as MaixPy's `components/maix/gen_api.py` -> `docs/api/maix`.
 The generated docs are a build artifact and are not tracked in git; run
 `python3 tools/gen_api_docs.py` to regenerate them alone.
 
+### Fresh clone / clean build
+
+Only tracked sources are required.  `binding/lvgl_python.c`, `binding/lvgl.pyi`,
+`binding/lv_conf.h`, `build/`, `dist/` and `docs/api/` are generated:
+
+```bash
+git clone https://github.com/Taoxuan-168/Maix_LVGL.git
+cd Maix_LVGL
+export MAIXCDK_PATH=/path/to/MaixCDK
+python3 -m pip install 'pycparser>=3.0'
+python3 setup.py bdist_wheel
+```
+
+The build automatically:
+
+- downloads LVGL/freetype into MaixCDK on first use,
+- applies `tools/patch_maixcdk.py` (enables `LV_USE_FREETYPE` and links the
+  freetype component),
+- applies `tools/patch_lvgl.py` (LVGL 9.1.0 observer/canvas fixes),
+- regenerates `binding/lvgl_python.c` and `binding/lvgl.pyi`,
+- builds and packages `dist/maix_lvgl-*.whl`.
+
 Build requirements: MaixCDK with MaixCAM2 toolchain/Python headers under
-`dl/extracted`, **cmake 3.x** (MaixCDK's freetype subproject rejects cmake 4),
+`dl/extracted`, **cmake 3.x or 4.x** (`tools/patch_maixcdk.py` passes
+`-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to freetype for CMake 4),
 `pycparser` (`pip install 'pycparser>=3.0'`), host `gcc`, and network access
 for the first dependency download.
 

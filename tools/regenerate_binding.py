@@ -199,6 +199,11 @@ def ensure_binding(force: bool = False, log=print, sdk_path=None):
     sdk = Path(sdk_path).resolve() if sdk_path else mk.find_maixcdk()
     version = mk.lvgl_version(sdk)
     lvgl_dir = mk.ensure_lvgl_source(sdk, version, log)
+    # The binding needs FreeType to load OTF/TTF device fonts; enable it in
+    # MaixCDK's LVGL config and link the freetype component.  Idempotent.
+    import patch_maixcdk
+
+    patch_maixcdk.enable_freetype(sdk, log)
     # LVGL 9.1.0 defects that the binding exposes (observer delete hook and
     # canvas copy assertion).  Idempotent; also covers a fresh download.
     import patch_lvgl

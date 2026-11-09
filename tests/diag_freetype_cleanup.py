@@ -1,0 +1,33 @@
+import time
+from maix import display, touchscreen
+import maix_lvgl as lv
+
+print("step: display", flush=True)
+disp = display.Display()
+print("step: touch", flush=True)
+ts = touchscreen.TouchScreen()
+print("step: lv.init", flush=True)
+driver = lv.init(disp, ts)
+print("step: freetype_init", flush=True)
+print("  result:", lv.freetype_init(256), flush=True)
+print("step: create font", flush=True)
+font = lv.freetype_font_create("/maixapp/share/font/SourceHanSansCN-Regular.otf", 0, 24, 0)
+print("  font:", font, flush=True)
+label = lv.label(lv.screen_active())
+label.set_text("中文")
+label.set_style_text_font(font, 0)
+for _ in range(10):
+    lv.timer_handler(); time.sleep(0.01)
+print("step: delete label", flush=True)
+label.delete()
+print("step: delete font", flush=True)
+font.freetype_font_delete()
+print("step: freetype_uninit", flush=True)
+lv.freetype_uninit()
+print("step: lv.deinit", flush=True)
+lv.deinit()
+print("step: ts.close", flush=True)
+ts.close()
+print("step: disp.close", flush=True)
+disp.close()
+print("DONE", flush=True)
