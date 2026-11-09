@@ -79,14 +79,41 @@ Four self-contained examples reproduce the visual styles collected for this
 project.  Each has an on-screen **Exit** button; `--debug-images` captures a
 screenshot and exits after 12 seconds.
 
-| file | style | highlights |
-| --- | --- | --- |
-| `examples/tile_dashboard.py` | HomeTiles | tile dashboard, light/climate/weather/media/energy/security cards, popups, chart |
-| `examples/neon_dashboard.py` | Project Aura | black + neon outlines, CO2/temperature/humidity/particle/VOC cards, live trend |
-| `examples/music_player.py` | LVGL Music | rotating cover, progress/volume, prev/play/next, 24-bar spectrum |
-| `examples/watchface.py` | ZSWatch | round dial, neon step/battery arcs, seconds hand, theme switching |
+### HomeTiles — tile dashboard
 
-Screenshots: `examples/screenshots/{tile_dashboard,neon_dashboard,music_player,watchface}.png`.
+[`examples/tile_dashboard.py`](examples/tile_dashboard.py)
+
+![HomeTiles tile dashboard](examples/screenshots/tile_dashboard.png)
+
+Tile dashboard with light, climate, weather, media, energy and security cards,
+popups, a chart and a rotating cover.
+
+### Project Aura — neon instrument panel
+
+[`examples/neon_dashboard.py`](examples/neon_dashboard.py)
+
+![Project Aura neon dashboard](examples/screenshots/neon_dashboard.png)
+
+Black background with neon outlines: CO2, temperature, humidity, particle,
+VOC/NOx and time cards, live trend and breathing borders.
+
+### LVGL Music — player
+
+[`examples/music_player.py`](examples/music_player.py)
+
+![LVGL Music player](examples/screenshots/music_player.png)
+
+Rotating cover, progress/volume sliders, previous/play/next controls and a
+24-bar spectrum analyzer.
+
+### ZSWatch — watchface
+
+[`examples/watchface.py`](examples/watchface.py)
+
+![ZSWatch watchface](examples/screenshots/watchface.png)
+
+Round dial with neon step/battery arcs, a seconds hand and tappable theme
+switching.
 
 Run one directly on the device:
 

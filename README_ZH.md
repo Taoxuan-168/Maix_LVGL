@@ -76,14 +76,37 @@ python showcase.py
 四个自包含示例对应前面收集的界面风格。每个都有屏幕 **退出** 按钮；
 `--debug-images` 会截图并在 12 秒后退出。
 
-| 文件 | 风格 | 亮点 |
-| --- | --- | --- |
-| `examples/tile_dashboard.py` | HomeTiles | 磁贴仪表盘：灯光/温控/天气/媒体/能耗/安防卡片、弹窗、图表 |
-| `examples/neon_dashboard.py` | Project Aura | 黑底霓虹描边、CO2/温度/湿度/颗粒物/VOC 卡片、实时趋势 |
-| `examples/music_player.py` | LVGL Music | 旋转封面、进度/音量、上一首/播放/下一首、24 柱频谱 |
-| `examples/watchface.py` | ZSWatch | 圆形表盘、霓虹步数/电量弧、秒针、主题切换 |
+### HomeTiles — 磁贴仪表盘
 
-截图：`examples/screenshots/{tile_dashboard,neon_dashboard,music_player,watchface}.png`。
+[`examples/tile_dashboard.py`](examples/tile_dashboard.py)
+
+![HomeTiles 磁贴仪表盘](examples/screenshots/tile_dashboard.png)
+
+灯光、温控、天气、媒体、能耗、安防卡片，带弹窗、图表和旋转封面。
+
+### Project Aura — 霓虹仪表盘
+
+[`examples/neon_dashboard.py`](examples/neon_dashboard.py)
+
+![Project Aura 霓虹仪表盘](examples/screenshots/neon_dashboard.png)
+
+黑底霓虹描边：CO2、温度、湿度、颗粒物、VOC/NOx、时间卡片，实时趋势和呼吸边框。
+
+### LVGL Music — 播放器
+
+[`examples/music_player.py`](examples/music_player.py)
+
+![LVGL Music 播放器](examples/screenshots/music_player.png)
+
+旋转封面、进度/音量滑块、上一首/播放/下一首、24 柱频谱。
+
+### ZSWatch — 表盘
+
+[`examples/watchface.py`](examples/watchface.py)
+
+![ZSWatch 表盘](examples/screenshots/watchface.png)
+
+圆形表盘、霓虹步数/电量弧、秒针，点击表盘切换主题。
 
 在设备上直接运行：
 
