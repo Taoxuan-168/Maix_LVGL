@@ -73,6 +73,27 @@ With `MAIXPY_DEBUG_IMAGES=1` the demo auto-advances the pages, exits after
 
 
 
+## UI style examples
+
+Four self-contained examples reproduce the visual styles collected for this
+project.  Each has an on-screen **Exit** button; `--debug-images` captures a
+screenshot and exits after 12 seconds.
+
+| file | style | highlights |
+| --- | --- | --- |
+| `examples/tile_dashboard.py` | HomeTiles | tile dashboard, light/climate/weather/media/energy/security cards, popups, chart |
+| `examples/neon_dashboard.py` | Project Aura | black + neon outlines, CO2/temperature/humidity/particle/VOC cards, live trend |
+| `examples/music_player.py` | LVGL Music | rotating cover, progress/volume, prev/play/next, 24-bar spectrum |
+| `examples/watchface.py` | ZSWatch | round dial, neon step/battery arcs, seconds hand, theme switching |
+
+Screenshots: `examples/screenshots/{tile_dashboard,neon_dashboard,music_player,watchface}.png`.
+
+Run one directly on the device:
+
+```bash
+python examples/tile_dashboard.py
+```
+
 ## Chinese text with FreeType
 
 LVGL's built-in Montserrat fonts only cover Latin.  The build enables
