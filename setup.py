@@ -92,7 +92,7 @@ class MaixCDKBuildExt(build_ext):
                 "--pyi",
                 str(ROOT / "binding" / "lvgl.pyi"),
                 "--out",
-                str(ROOT / "docs" / "api" / "maix_lvgl"),
+                str(ROOT / "docs" / "api"),
             ]
             print("-- generating API documentation")
             subprocess.check_call(docs, cwd=ROOT)

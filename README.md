@@ -97,11 +97,12 @@ What happens:
    `maix_lvgl/` contains `__init__.py`, `driver.py`,
    `lvgl.cpython-313-aarch64-linux-gnu.so` and `dl_lib/libdatachannel.so`.
 
-The build also generates Markdown API documentation from `binding/lvgl.pyi`
-into `docs/api/maix_lvgl/` (same build-time flow as MaixPy's
-`components/maix/gen_api.py` -> `docs/api/maix`). The generated docs are a
-build artifact and are not tracked in git; run `python3 tools/gen_api_docs.py`
-to regenerate them alone.
+The build also generates MaixPy-style API documentation from
+`binding/lvgl.pyi` into `docs/api/` (`api.json`, `config.json`, `README.md`,
+`README2.md`, `sidebar.yaml` and `maix_lvgl/{lvgl,maix_lvgl}.md`), the same
+build-time flow as MaixPy's `components/maix/gen_api.py` -> `docs/api/maix`.
+The generated docs are a build artifact and are not tracked in git; run
+`python3 tools/gen_api_docs.py` to regenerate them alone.
 
 Build requirements: MaixCDK with MaixCAM2 toolchain/Python headers under
 `dl/extracted`, **cmake 3.x** (MaixCDK's freetype subproject rejects cmake 4),

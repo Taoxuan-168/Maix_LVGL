@@ -1,25 +1,40 @@
 #!/usr/bin/env python3
-"""Generate Markdown API documentation from binding/lvgl.pyi.
+"""Generate MaixPy-style Markdown API docs from binding/lvgl.pyi.
 
-This mirrors MaixPy's build-time documentation flow (components/maix/gen_api.py
--> docs/api/maix): ``setup.py`` runs this script after the binding is
-generated, and the output under ``docs/api/maix_lvgl/`` is a build artifact
-(not tracked in git).
+The output mirrors MaixPy's docs/api structure:
+
+    docs/api/
+    ├── api.json
+    ├── config.json
+    ├── README.md
+    ├── README2.md
+    ├── sidebar.yaml
+    └── maix_lvgl/
+        ├── lvgl.md
+        └── maix_lvgl.md
+
+The module pages use the same Section/table/code-block layout as MaixPy's
+MaixCDK doc_tool output (Module / Enum / Variable / Function / Class).
 """
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+MODULE = "maix_lvgl"
 
 
 @dataclass
 class Method:
     name: str
     signature: str
+    args: list[tuple[str, str, str | None]] = field(default_factory=list)
+    ret: str = ""
 
 
 @dataclass
@@ -43,7 +58,6 @@ def _strip_trailer(text: str) -> str:
 
 
 def _logical_lines(text: str) -> list[str]:
-    """Join def/class continuation lines while parentheses are unbalanced."""
     lines: list[str] = []
     buf = ""
     for raw in text.splitlines():
@@ -59,6 +73,68 @@ def _logical_lines(text: str) -> list[str]:
     return lines
 
 
+def _split_args(text: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    current = ""
+    for ch in text:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        parts.append(current.strip())
+    return parts
+
+
+def parse_signature(signature: str):
+    text = signature.strip()
+    if text.startswith("def "):
+        text = text[4:]
+    name, rest = text.split("(", 1)
+    depth = 1
+    index = 0
+    while index < len(rest):
+        if rest[index] == "(":
+            depth += 1
+        elif rest[index] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        index += 1
+    args_text = rest[:index]
+    tail = rest[index + 1 :].strip()
+    ret = ""
+    if tail.startswith("->"):
+        ret = tail[2:].strip().rstrip(":").strip()
+    args: list[tuple[str, str, str | None]] = []
+    for part in _split_args(args_text):
+        if part in ("/", "*") or part.startswith("**"):
+            continue
+        if part.startswith("*"):
+            part = part[1:]
+        if not part:
+            continue
+        if ":" in part:
+            arg_name, arg_type = part.split(":", 1)
+            arg_name, arg_type = arg_name.strip(), arg_type.strip()
+        else:
+            arg_name, arg_type = part, ""
+        default = None
+        if "=" in arg_type:
+            arg_type, default = arg_type.split("=", 1)
+            arg_type, default = arg_type.strip(), default.strip()
+        if arg_name in ("self", "cls"):
+            continue
+        args.append((arg_type, arg_name, default))
+    return name.strip(), args, ret
+
+
 def parse_pyi(text: str):
     classes: list[Class] = []
     functions: list[Method] = []
@@ -71,7 +147,6 @@ def parse_pyi(text: str):
         if not stripped or stripped.startswith(("#", "from ", "import ")):
             continue
         indent = len(line) - len(line.lstrip())
-
         class_match = re.match(r"class\s+(\w+)\s*(?:\(([^)]*)\))?\s*:", stripped)
         def_match = re.match(r"def\s+(\w+)\s*\((.*)\)\s*(?:->\s*(.*?))?\s*:\s*\.\.\.", stripped)
         field_match = re.match(r"(\w+)\s*:\s*(.+)", stripped)
@@ -84,7 +159,8 @@ def parse_pyi(text: str):
                 classes.append(current)
                 continue
             if def_match:
-                functions.append(Method(def_match.group(1), _strip_trailer(stripped)))
+                name, args, ret = parse_signature(_strip_trailer(stripped))
+                functions.append(Method(name, _strip_trailer(stripped), args, ret))
                 current = None
                 continue
             if field_match:
@@ -93,7 +169,6 @@ def parse_pyi(text: str):
 
         if current is None:
             continue
-
         if indent == 4:
             if class_match:
                 bases = [b.strip() for b in (class_match.group(2) or "").split(",") if b.strip()]
@@ -102,7 +177,8 @@ def parse_pyi(text: str):
                 continue
             nested = None
             if def_match:
-                current.methods.append(Method(def_match.group(1), _strip_trailer(stripped)))
+                name, args, ret = parse_signature(_strip_trailer(stripped))
+                current.methods.append(Method(name, _strip_trailer(stripped), args, ret))
                 continue
             if field_match:
                 current.fields.append(Field(field_match.group(1), _strip_trailer(field_match.group(2))))
@@ -110,7 +186,8 @@ def parse_pyi(text: str):
 
         target = nested if nested is not None else current
         if def_match:
-            target.methods.append(Method(def_match.group(1), _strip_trailer(stripped)))
+            name, args, ret = parse_signature(_strip_trailer(stripped))
+            target.methods.append(Method(name, _strip_trailer(stripped), args, ret))
         elif field_match:
             target.fields.append(Field(field_match.group(1), _strip_trailer(field_match.group(2))))
 
@@ -120,237 +197,546 @@ def parse_pyi(text: str):
 def classify(cls: Class) -> str:
     name = cls.name
     bases = " ".join(cls.bases)
-    if "Exception" in bases or (name.startswith("_") and name not in ("_Struct",)):
+    if "Exception" in bases or name == "_Struct" or (name.startswith("_") and name not in ("_Struct",)):
         return "skip"
-    if name == "_Struct":
-        return "skip"
-    if cls.methods:
-        return "class"
     if (
         cls.fields
+        and not cls.methods
         and not cls.nested
         and all(re.fullmatch(r"(ClassVar\[)?int(\])?", f.type.strip()) for f in cls.fields)
     ):
         return "enum"
-    if "_Struct" in bases or name.endswith("_t") or cls.fields:
-        return "struct"
     return "class"
 
 
-def _front_matter(title: str) -> str:
-    return f"---\ntitle: {title}\n---\n\n"
+# ---------------------------------------------------------------------------
+# api.json model (subset of MaixPy's api tree shape)
+# ---------------------------------------------------------------------------
+def _doc_for_method(method: Method) -> dict:
+    doc: dict = {"brief": ""}
+    params = []
+    for arg_type, arg_name, default in method.args:
+        text = f"{arg_name}: {arg_type}"
+        if default is not None:
+            text += f", default {default}"
+        params.append(text)
+    if params:
+        doc["param"] = params
+    if method.ret and method.ret not in ("None", "NoneType"):
+        doc["return"] = method.ret
+    return doc
 
 
-def _func_markdown(method: Method, level: int = "###") -> str:
-    return f"{level} `{method.name}`\n\n```python\n{method.signature}\n```\n\n"
+def _c_def(method: Method, with_self: bool = False) -> str:
+    ret = method.ret or "void"
+    args = []
+    if with_self:
+        args.append("self")
+    for arg_type, arg_name, _default in method.args:
+        args.append(f"{arg_type} {arg_name}".strip() if arg_type else arg_name)
+    return f"{ret} {method.name}({', '.join(args)})"
 
 
-def _class_markdown(cls: Class, kind: str) -> str:
-    bases = f"({', '.join(cls.bases)})" if cls.bases else ""
-    out = [f"### {kind} {cls.name}{bases}\n"]
-    if cls.fields:
-        out.append("\n**Fields**\n\n")
-        for f in cls.fields:
-            out.append(f"- `{f.name}`: `{f.type}`\n")
-        out.append("\n")
+def _py_def(method: Method) -> str:
+    args = []
+    for arg_type, arg_name, default in method.args:
+        text = f"{arg_name}: {arg_type}" if arg_type else arg_name
+        if default is not None:
+            text += f" = {default}"
+        args.append(text)
+    ret = f" -> {method.ret}" if method.ret else ""
+    return f"def {method.name}({', '.join(args)}){ret}"
+
+
+def _method_item(method: Method, full_name: str) -> dict:
+    return {
+        "type": "func",
+        "name": method.name,
+        "doc": {**_doc_for_method(method), "maixpy": full_name},
+        "args": [[a[0], a[1], a[2]] for a in method.args],
+        "ret_type": method.ret,
+        "static": False,
+        "def": _c_def(method),
+        "py_def": _py_def(method),
+    }
+
+
+def _class_item(cls: Class, full_name: str) -> dict:
+    members = {}
+    for method in cls.methods:
+        members[method.name] = _method_item(method, f"{full_name}.{method.name}")
+    for fld in cls.fields:
+        members[fld.name] = {
+            "type": "var",
+            "name": fld.name,
+            "doc": {"brief": f"{cls.name} field", "maixpy": f"{full_name}.{fld.name}"},
+            "value": fld.type,
+            "static": False,
+            "readonly": False,
+            "def": f"{fld.type} {fld.name}",
+        }
+    item = {
+        "type": "class",
+        "name": cls.name,
+        "doc": {"brief": "", "maixpy": full_name},
+        "def": f"class {cls.name}" + (f"({', '.join(cls.bases)})" if cls.bases else ""),
+        "members": members,
+    }
     if cls.nested:
-        for nested in cls.nested:
-            out.append(f"\n#### enum {cls.name}.{nested.name}\n\n")
-            for f in nested.fields:
-                out.append(f"- `{f.name}`: `{f.type}`\n")
-            if nested.methods:
-                out.append("\n")
-                for m in nested.methods:
-                    out.append(f"```python\n{m.signature}\n```\n\n")
-    if cls.methods:
-        out.append("\n**Methods**\n\n")
-        for m in cls.methods:
-            out.append(f"```python\n{m.signature}\n```\n\n")
-    return "".join(out)
+        item["nested"] = [
+            {
+                "type": "enum",
+                "name": nested.name,
+                "doc": {"brief": "", "maixpy": f"{full_name}.{nested.name}"},
+                "values": [[f.name, None, "int"] for f in nested.fields],
+                "def": f"enum {nested.name}",
+            }
+            for nested in cls.nested
+        ]
+    return item
+
+
+def build_modules(classes, functions, variables) -> dict:
+    lvgl_members: dict = {}
+    for func in sorted(functions, key=lambda m: m.name):
+        lvgl_members[func.name] = _method_item(func, f"{MODULE}.lvgl.{func.name}")
+    for var in sorted(variables, key=lambda f: f.name):
+        lvgl_members[var.name] = {
+            "type": "var",
+            "name": var.name,
+            "doc": {"brief": "", "maixpy": f"{MODULE}.lvgl.{var.name}"},
+            "value": var.type,
+            "static": False,
+            "readonly": False,
+            "def": f"{var.type} {var.name}",
+        }
+    for cls in sorted(classes, key=lambda c: c.name):
+        if classify(cls) == "enum":
+            lvgl_members[cls.name] = {
+                "type": "enum",
+                "name": cls.name,
+                "doc": {"brief": "", "maixpy": f"{MODULE}.lvgl.{cls.name}"},
+                "values": [[f.name, None, "int"] for f in cls.fields],
+                "def": f"enum class {cls.name}",
+            }
+        elif classify(cls) == "class":
+            lvgl_members[cls.name] = _class_item(cls, f"{MODULE}.lvgl.{cls.name}")
+
+    backend = {
+        "type": "module",
+        "doc": {"brief": "maix_lvgl backend: bind MaixPy display/touchscreen to LVGL"},
+        "members": {
+            "init": {
+                "type": "func",
+                "name": "init",
+                "doc": {
+                    "brief": "Initialize LVGL and bind MaixPy display/touchscreen.",
+                    "param": [
+                        "display: maix.display.Display, opened internally when omitted",
+                        "touchscreen: maix.touchscreen.TouchScreen, pass False to disable input",
+                        "width: display width when opening internally",
+                        "height: display height when opening internally",
+                    ],
+                    "maixpy": "maix_lvgl.init",
+                },
+                "args": [["Display | None", "display", "None"], ["TouchScreen | bool | None", "touchscreen", "None"], ["int | None", "width", "None"], ["int | None", "height", "None"]],
+                "ret_type": "DisplayDriver",
+                "static": False,
+                "def": "DisplayDriver init(Display * display, TouchScreen * touchscreen, int width, int height)",
+                "py_def": "def init(display=None, touchscreen=None, width=None, height=None)",
+            },
+            "deinit": {
+                "type": "func",
+                "name": "deinit",
+                "doc": {"brief": "Stop LVGL and release resources opened by init().", "maixpy": "maix_lvgl.deinit"},
+                "args": [],
+                "ret_type": "None",
+                "static": False,
+                "def": "void deinit()",
+                "py_def": "def deinit()",
+            },
+            "timer_handler": {
+                "type": "func",
+                "name": "timer_handler",
+                "doc": {
+                    "brief": "Advance the LVGL tick and run one timer-handler pass.",
+                    "maixpy": "maix_lvgl.timer_handler",
+                },
+                "args": [],
+                "ret_type": "int",
+                "static": False,
+                "def": "int timer_handler()",
+                "py_def": "def timer_handler()",
+            },
+            "process": {
+                "type": "func",
+                "name": "process",
+                "doc": {"brief": "Alias of timer_handler().", "maixpy": "maix_lvgl.process"},
+                "args": [],
+                "ret_type": "int",
+                "static": False,
+                "def": "int process()",
+                "py_def": "def process()",
+            },
+            "run": {
+                "type": "func",
+                "name": "run",
+                "doc": {
+                    "brief": "Run the LVGL loop until maix.app.need_exit() becomes true.",
+                    "maixpy": "maix_lvgl.run",
+                },
+                "args": [["int", "fps", "60"]],
+                "ret_type": "None",
+                "static": False,
+                "def": "void run(int fps)",
+                "py_def": "def run(fps=60)",
+            },
+            "DisplayDriver": {
+                "type": "class",
+                "name": "DisplayDriver",
+                "doc": {"brief": "Wrap a maix.display.Display and push LVGL frames to it.", "maixpy": "maix_lvgl.DisplayDriver"},
+                "def": "class DisplayDriver",
+                "members": {
+                    "__init__": {
+                        "type": "func",
+                        "name": "__init__",
+                        "doc": {"brief": "Create the LVGL display and its flush callback.", "maixpy": "maix_lvgl.DisplayDriver.__init__"},
+                        "args": [["Display | None", "display", "None"], ["int | None", "width", "None"], ["int | None", "height", "None"]],
+                        "ret_type": "None",
+                        "static": False,
+                        "def": "DisplayDriver(Display * display, int width, int height)",
+                        "py_def": "def __init__(display=None, width=None, height=None)",
+                    },
+                    "deinit": {
+                        "type": "func",
+                        "name": "deinit",
+                        "doc": {"brief": "Delete the LVGL display and close an internally opened display.", "maixpy": "maix_lvgl.DisplayDriver.deinit"},
+                        "args": [],
+                        "ret_type": "None",
+                        "static": False,
+                        "def": "void deinit()",
+                        "py_def": "def deinit()",
+                    },
+                },
+            },
+            "TouchDriver": {
+                "type": "class",
+                "name": "TouchDriver",
+                "doc": {"brief": "Feed maix.touchscreen.TouchScreen input into an LVGL pointer indev.", "maixpy": "maix_lvgl.TouchDriver"},
+                "def": "class TouchDriver",
+                "members": {
+                    "__init__": {
+                        "type": "func",
+                        "name": "__init__",
+                        "doc": {"brief": "Create the LVGL pointer indev.", "maixpy": "maix_lvgl.TouchDriver.__init__"},
+                        "args": [["TouchScreen | None", "touchscreen", "None"], ["display_t | None", "display", "None"]],
+                        "ret_type": "None",
+                        "static": False,
+                        "def": "TouchDriver(TouchScreen * touchscreen, display_t * display)",
+                        "py_def": "def __init__(touchscreen=None, display=None)",
+                    },
+                    "deinit": {
+                        "type": "func",
+                        "name": "deinit",
+                        "doc": {"brief": "Delete the LVGL indev and close an internally opened touchscreen.", "maixpy": "maix_lvgl.TouchDriver.deinit"},
+                        "args": [],
+                        "ret_type": "None",
+                        "static": False,
+                        "def": "void deinit()",
+                        "py_def": "def deinit()",
+                    },
+                },
+            },
+        },
+    }
+
+    return {
+        "type": "root",
+        "members": {
+            MODULE: {
+                "type": "module",
+                "doc": {
+                    "brief": "LVGL 9.1.0 bindings for MaixPy on MaixCAM2 (MaixCDK project)",
+                },
+                "members": {
+                    "lvgl": {
+                        "type": "module",
+                        "doc": {
+                            "brief": "LVGL 9.1.0 CPython bindings, generated from MaixCDK's LVGL source with omnipython-lvgl",
+                        },
+                        "members": lvgl_members,
+                    },
+                    "maix_lvgl": backend,
+                },
+            }
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Markdown rendering (MaixPy doc_tool/gen_markdown.py layout)
+# ---------------------------------------------------------------------------
+def _escape(name: str) -> str:
+    return name.replace("_", r"\_")
+
+
+def _prefix(text: str, prefix: str = "> ") -> str:
+    return "\n".join(prefix + line for line in text.splitlines())
+
+
+def _doc_table(doc: dict) -> str:
+    skip = {"maixpy", "maixcdk", "py_doc", "brief"}
+    content = ""
+    for key, value in doc.items():
+        if key in skip:
+            continue
+        if isinstance(value, list):
+            content += f"| **{key}** | "
+            for index, item in enumerate(value):
+                content += f"**{index + 1}**. {item.replace(chr(10), '<br>')}<br>"
+            content += "|\n"
+        elif isinstance(value, dict):
+            content += f"| **{key}** | "
+            for k, v in value.items():
+                content += f"**{k}**: {str(v).replace(chr(10), '<br>')}<br>"
+            content += "|\n"
+        else:
+            content += f"| **{key}** | {str(value).replace(chr(10), '<br>')} |\n"
+    return content
+
+
+def _has_doc_kv(doc: dict) -> bool:
+    skip = {"maixpy", "maixcdk", "py_doc", "brief"}
+    return any(key not in skip for key in doc)
+
+
+class _Ids:
+    def __init__(self):
+        self.ids = {}
+
+    def update(self, heading: str, name: str, anchor: str | None = None) -> str:
+        anchor = anchor or name
+        key = anchor.lower()
+        if key not in self.ids:
+            self.ids[key] = {"count": 1}
+            return f"{heading} {_escape(name)} {{#{anchor}}}"
+        self.ids[key]["count"] += 1
+        return f"{heading} {_escape(name)} {{#{anchor}-{self.ids[key]['count']}}}"
+
+
+def module_to_md(full_name: str, module: dict, start_comment: str) -> str:
+    brief = module["doc"] if isinstance(module["doc"], str) else module["doc"].get("brief", "")
+    content = f"---\ntitle: {full_name}\n---\n\n{brief}\n\n"
+    content += start_comment
+    ids = _Ids()
+
+    def func_block(heading: str, name: str, item: dict) -> str:
+        block = ids.update(heading, name) + "\n\n"
+        if item.get("py_def"):
+            block += f"```python\n{item['py_def']}\n```\n"
+        block += item["doc"].get("brief", "") + "\n\n"
+        if _has_doc_kv(item["doc"]):
+            block += "| item | description |\n"
+            block += "| --- | --- |\n"
+            block += _doc_table(item["doc"])
+        block += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n".format(
+            _prefix(item.get("def", ""))
+        )
+        return block
+
+    # Module
+    content += ids.update("##", "Module") + "\n\n"
+    submodules = [
+        (key, item)
+        for key, item in module["members"].items()
+        if item["type"] == "module"
+    ]
+    if submodules:
+        content += "| module | brief |\n| --- | --- |\n"
+        for key, item in submodules:
+            content += f"| [{_escape(key)}](./{key}.md) | {item['doc'].get('brief', '')} |\n"
+    else:
+        content += "No module\n"
+    content += "\n\n"
+
+    # Enum
+    content += ids.update("##", "Enum") + "\n\n"
+    for key, item in module["members"].items():
+        if item["type"] != "enum":
+            continue
+        content += ids.update("###", key) + "\n\n"
+        content += item["doc"].get("brief", "") + "\n\n"
+        content += "| item | describe |\n| --- | --- |\n"
+        content += _doc_table(item["doc"])
+        content += "| **values** | "
+        for value in item["values"]:
+            content += f"**{value[0]}**: {value[2]}<br>"
+        content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n".format(
+            _prefix(item.get("def", ""))
+        )
+    content += "\n\n"
+
+    # Variable
+    content += ids.update("##", "Variable") + "\n\n"
+    for key, item in module["members"].items():
+        if item["type"] != "var":
+            continue
+        content += ids.update("###", key) + "\n\n"
+        content += item["doc"].get("brief", "") + "\n\n"
+        content += "| item | description |\n| --- | --- |\n"
+        content += _doc_table(item["doc"])
+        if item.get("value"):
+            content += f"| **value** | **{item['value']}** |\n"
+        content += f"| **readonly**| {item.get('readonly', False)} |\n"
+        content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n".format(
+            _prefix(item.get("def", ""))
+        )
+    content += "\n\n"
+
+    # Function
+    content += ids.update("##", "Function") + "\n\n"
+    for key, item in module["members"].items():
+        if item["type"] != "func":
+            continue
+        content += func_block("###", key, item)
+    content += "\n\n"
+
+    # Class
+    content += ids.update("##", "Class") + "\n\n"
+    for key, item in module["members"].items():
+        if item["type"] != "class":
+            continue
+        content += ids.update("###", key) + "\n\n"
+        content += item["doc"].get("brief", "") + "\n\n"
+        if _has_doc_kv(item["doc"]):
+            content += "| item | description |\n| --- | --- |\n"
+            content += _doc_table(item["doc"])
+        content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n\n".format(
+            _prefix(item.get("def", ""))
+        )
+        for member_key, member in item.get("members", {}).items():
+            content += ids.update("####", member_key) + "\n\n"
+            if member.get("py_def"):
+                content += f"```python\n{member['py_def']}\n```\n"
+            content += member["doc"].get("brief", "") + "\n\n"
+            content += "| item | description |\n| --- | --- |\n"
+            content += f"| **type** | {member['type']} |\n"
+            content += _doc_table(member["doc"])
+            content += f"| **static** | {member.get('static', False)} |\n"
+            if member["type"] == "var":
+                content += f"| **readonly** | {member.get('readonly', False)} |\n"
+            content += "\n> C++ defination code:\n> ```cpp\n{}\n> ```\n".format(
+                _prefix(member.get("def", ""))
+            )
+        for nested in item.get("nested", []):
+            content += ids.update("####", f"enum {nested['name']}", f"enum-{nested['name']}") + "\n\n"
+            content += "| item | describe |\n| --- | --- |\n"
+            content += "| **values** | "
+            for value in nested["values"]:
+                content += f"**{value[0]}**: {value[2]}<br>"
+            content += "\n"
+    return content
+
+
+def _start_comment(full_name: str) -> str:
+    return (
+        f"\n> You can use `{full_name}` to access this module with maix_lvgl\n"
+        "> This module is generated from [MaixCDK](https://github.com/sipeed/MaixCDK) "
+        "and [omnipython-lvgl](https://github.com/PyDevices/omnipython-lvgl)\n\n"
+    )
 
 
 def generate(pyi_path: Path, out_dir: Path) -> None:
     classes, functions, variables = parse_pyi(pyi_path.read_text(encoding="utf-8"))
+    api_tree = build_modules(classes, functions, variables)
 
-    grouped: dict[str, list[Class]] = {"class": [], "enum": [], "struct": [], "skip": []}
-    for cls in classes:
-        grouped[classify(cls)].append(cls)
-
+    # Clean generated files (keep any unrelated files in docs/api).
     out_dir.mkdir(parents=True, exist_ok=True)
-    for old in out_dir.glob("*.md"):
-        old.unlink()
-    sidebar = out_dir / "sidebar.yaml"
-    if sidebar.exists():
-        sidebar.unlink()
+    for name in ("api.json", "config.json", "README.md", "README2.md", "sidebar.yaml"):
+        (out_dir / name).unlink(missing_ok=True)
+    module_dir = out_dir / MODULE
+    if module_dir.exists():
+        shutil.rmtree(module_dir)
+    module_dir.mkdir(parents=True)
 
-    # lvgl.md: module-level functions and variables
-    lvgl = [_front_matter("maix_lvgl.lvgl")]
-    lvgl.append(
-        "# lvgl\n\n"
-        "Generated CPython bindings for LVGL 9.1.0 (the version pinned by\n"
-        "MaixCDK), produced from MaixCDK's LVGL source with the\n"
-        "[omnipython-lvgl](https://github.com/PyDevices/omnipython-lvgl) generator.\n\n"
-        f"- Functions: {len(functions)}\n"
-        f"- Classes: {len(grouped['class'])}\n"
-        f"- Enums: {len(grouped['enum'])}\n"
-        f"- Structs: {len(grouped['struct'])}\n"
-        f"- Module variables: {len(variables)}\n\n"
-        "See also: [classes](classes.md), [enums](enums.md), "
-        "[structs](structs.md), [maix_lvgl backend](maix_lvgl.md).\n\n"
+    # api.json
+    (out_dir / "api.json").write_text(
+        json.dumps(api_tree, indent=4, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    lvgl.append("## Functions\n\n")
-    for func in sorted(functions, key=lambda m: m.name):
-        lvgl.append(_func_markdown(func))
-    lvgl.append("## Variables\n\n")
-    for var in sorted(variables, key=lambda f: f.name):
-        lvgl.append(f"- `{var.name}`: `{var.type}`\n")
-    (out_dir / "lvgl.md").write_text("".join(lvgl), encoding="utf-8")
 
-    # classes.md
-    classes_md = [_front_matter("maix_lvgl.classes")]
-    classes_md.append("# Classes\n\n")
-    for cls in sorted(grouped["class"], key=lambda c: c.name):
-        classes_md.append(_class_markdown(cls, "class"))
-    (out_dir / "classes.md").write_text("".join(classes_md), encoding="utf-8")
-
-    # enums.md
-    enums_md = [_front_matter("maix_lvgl.enums")]
-    enums_md.append("# Enums and constants\n\n")
-    for cls in sorted(grouped["enum"], key=lambda c: c.name):
-        enums_md.append(_class_markdown(cls, "enum"))
-    (out_dir / "enums.md").write_text("".join(enums_md), encoding="utf-8")
-
-    # structs.md
-    structs_md = [_front_matter("maix_lvgl.structs")]
-    structs_md.append("# Structs\n\n")
-    for cls in sorted(grouped["struct"], key=lambda c: c.name):
-        structs_md.append(_class_markdown(cls, "struct"))
-    (out_dir / "structs.md").write_text("".join(structs_md), encoding="utf-8")
-
-    # maix_lvgl.md: backend helpers (hand-written, stable API)
-    backend = _front_matter("maix_lvgl")
-    backend += """# maix_lvgl
-
-`maix_lvgl` re-exports the generated LVGL bindings and adds the MaixCAM2
-display/touchscreen backend. Use it as `import maix_lvgl as lv`.
-
-## init
-
-```python
-def init(display=None, touchscreen=None, width=None, height=None)
-```
-
-Initialize LVGL and bind MaixPy's display/touchscreen. When omitted, a
-`maix.display.Display` (BGRA8888) and a `maix.touchscreen.TouchScreen` are
-opened. Pass `touchscreen=False` to run without input.
-
-## deinit
-
-```python
-def deinit()
-```
-
-Stop LVGL and release the display/touchscreen opened by `init()`.
-
-## timer_handler
-
-```python
-def timer_handler()
-```
-
-Advance the LVGL tick (`lv.tick_inc`) and run one LVGL timer-handler pass.
-Use this instead of the raw `lvgl.timer_handler()`.
-
-## process
-
-```python
-def process()
-```
-
-Alias of `timer_handler()`.
-
-## run
-
-```python
-def run(fps=60)
-```
-
-Run the LVGL loop until `maix.app.need_exit()` becomes true.
-
-## DisplayDriver
-
-Wraps a `maix.display.Display`: creates the LVGL display, renders into a
-BGRA8888 `bytearray` and pushes frames with `display.show()`.
-
-## TouchDriver
-
-Wraps a `maix.touchscreen.TouchScreen`: feeds `read()` into an LVGL pointer
-indev.
-
-## Complete example
-
-```python
-import time
-from maix import app, display, touchscreen
-import maix_lvgl as lv
-
-disp = display.Display()
-ts = touchscreen.TouchScreen()
-
-try:
-    lv.init(disp, ts)
-    scr = lv.screen_active()
-    btn = lv.button(scr)
-    btn.set_size(240, 120)
-    btn.center()
-    lv.label(btn).set_text("Hello MaixCAM2")
-
-    while not app.need_exit():
-        lv.timer_handler()
-        time.sleep(0.005)
-finally:
-    lv.deinit()
-    ts.close()
-    disp.close()
-```
-"""
-    (out_dir / "maix_lvgl.md").write_text(backend, encoding="utf-8")
-
-    # README index
-    readme = _front_matter("maix_lvgl API")
-    readme += f"""# maix_lvgl API documentation
-
-Generated from `binding/lvgl.pyi` at build time (MaixPy-style `docs/api`).
-
-| File | Contents |
-| --- | --- |
-| [lvgl.md](lvgl.md) | module functions ({len(functions)}) and variables ({len(variables)}) |
-| [classes.md](classes.md) | widget/object classes ({len(grouped['class'])}) |
-| [enums.md](enums.md) | enums and constants ({len(grouped['enum'])}) |
-| [structs.md](structs.md) | C struct wrappers ({len(grouped['struct'])}) |
-| [maix_lvgl.md](maix_lvgl.md) | MaixCAM2 backend (`init`, `deinit`, `run`, drivers) |
-
-The binding is generated from MaixCDK's pinned LVGL (9.1.0) with
-[PyDevices/omnipython-lvgl](https://github.com/PyDevices/omnipython-lvgl).
-"""
-    (out_dir / "README.md").write_text(readme, encoding="utf-8")
-
-    (out_dir / "sidebar.yaml").write_text(
-        "- README.md\n- lvgl.md\n- classes.md\n- enums.md\n- structs.md\n- maix_lvgl.md\n",
+    # config.json
+    (out_dir / "config.json").write_text(
+        json.dumps({"import": "config_en", "name": "maix_lvgl API Reference"}, indent=4) + "\n",
         encoding="utf-8",
     )
 
+    # Module pages
+    root = api_tree["members"][MODULE]
+    for name, module in root["members"].items():
+        full_name = f"{MODULE}.{name}"
+        content = module_to_md(full_name, module, _start_comment(full_name))
+        (module_dir / f"{name}.md").write_text(content, encoding="utf-8")
+
+    # README (Brief)
+    readme = (
+        "---\n"
+        "title: maix_lvgl API -- LVGL bindings for MaixPy on MaixCAM2\n"
+        "---\n\n"
+        "**API documentation for maix_lvgl (LVGL 9.1.0 bindings for MaixPy).**\n\n"
+        "If you want to **preview API doc offline**:\n"
+        "1. Download the wheel from the [Releases page](https://github.com/Taoxuan-168/Maix_LVGL/releases).\n"
+        "2. Build maix_lvgl; the API doc is generated in the `maix_lvgl/docs/api/` directory.\n\n"
+        "> For maix_lvgl developer: This API documentation is generated from "
+        "`binding/lvgl.pyi`, DO NOT edit this file manually!\n\n"
+        "maix_lvgl API documentation, modules:\n\n"
+        "| module | brief |\n"
+        "| --- | --- |\n"
+    )
+    for name, module in root["members"].items():
+        readme += f"|[maix_lvgl.{name}](./{MODULE}/{name}.md) | {module['doc'].get('brief', '')} |\n"
+    (out_dir / "README.md").write_text(readme, encoding="utf-8")
+
+    # README2 (offline note, MaixPy-style)
+    (out_dir / "README2.md").write_text(
+        "Where is the API docs?\n"
+        "=====\n\n"
+        "API docs is generated from `binding/lvgl.pyi` during the build and can be\n"
+        "read locally in `maix_lvgl/docs/api/`.\n\n"
+        "If you want to preview API doc offline, there are two ways:\n"
+        "1. Download the wheel from the [Releases page](https://github.com/Taoxuan-168/Maix_LVGL/releases).\n"
+        "2. Build maix_lvgl project; API doc is generated in `maix_lvgl/docs/api/`.\n",
+        encoding="utf-8",
+    )
+
+    # sidebar.yaml
+    sidebar = (
+        "items:\n"
+        "-   file: README.md\n"
+        "    label: Brief\n"
+        "-   collapsed: false\n"
+        "    items:\n"
+    )
+    for name in root["members"]:
+        sidebar += (
+            "    -   collapsed: false\n"
+            f"        file: {MODULE}/{name}.md\n"
+            f"        label: {name}\n"
+        )
+    sidebar += "    label: maix_lvgl\n"
+    (out_dir / "sidebar.yaml").write_text(sidebar, encoding="utf-8")
+
     print(
-        f"API docs: {out_dir} "
-        f"(functions {len(functions)}, classes {len(grouped['class'])}, "
-        f"enums {len(grouped['enum'])}, structs {len(grouped['struct'])})"
+        f"API docs: {out_dir} (modules {len(root['members'])}, "
+        f"functions {len(functions)}, variables {len(variables)}, "
+        f"classes {sum(1 for c in classes if classify(c) == 'class')}, "
+        f"enums {sum(1 for c in classes if classify(c) == 'enum')})"
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pyi", default=str(ROOT / "binding" / "lvgl.pyi"))
-    parser.add_argument("--out", default=str(ROOT / "docs" / "api" / "maix_lvgl"))
+    parser.add_argument("--out", default=str(ROOT / "docs" / "api"))
     args = parser.parse_args()
     generate(Path(args.pyi), Path(args.out))
 

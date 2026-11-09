@@ -11,4 +11,4 @@ binding/lv_conf.h
 binding/.binding_stamp.json
 
 # Generated API documentation (recreated by setup.py)
-docs/api/maix_lvgl/
+docs/api/
