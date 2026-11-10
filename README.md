@@ -169,6 +169,43 @@ Run one directly on the device:
 python examples/tile_dashboard.py
 ```
 
+## Camera threshold editors
+
+Two utilities for tuning color thresholds against the live camera.  Both run
+on the device and use only MaixPy image APIs.
+
+### Binary threshold editor
+
+[`examples/threshold_editor.py`](examples/threshold_editor.py)
+
+A single gray threshold (0–255) with a live camera / binary split view and a
+slider that applies immediately.
+
+![Binary threshold editor](examples/screenshots/threshold_editor.png)
+
+### Multi-color LAB threshold editor
+
+[`examples/multi_color_threshold.py`](examples/multi_color_threshold.py)
+
+Inspired by MaixCDK's `app_find_blobs`: three color entries (red / green /
+blue), six LAB sliders for the selected color, and three view modes:
+
+- `Original` — camera image
+- `Binary All` — all three color thresholds combined
+- `Selected` — only the currently selected color
+
+`Print` dumps the threshold table to stdout.  Sliders are independent and
+apply immediately; a reversed min/max range simply matches no pixels.
+
+![Multi-color LAB threshold editor](examples/screenshots/multi_color_threshold.png)
+
+Run either one on the device:
+
+```bash
+python examples/threshold_editor.py
+python examples/multi_color_threshold.py
+```
+
 ## Chinese text with FreeType
 
 LVGL's built-in Montserrat fonts only cover Latin.  The build enables

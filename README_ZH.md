@@ -161,6 +161,41 @@ python showcase.py
 python examples/tile_dashboard.py
 ```
 
+## 摄像头阈值编辑器
+
+两个用于在实时摄像头上调整颜色阈值的示例，图像处理全部使用 MaixPy API。
+
+### 二值阈值编辑器
+
+[`examples/threshold_editor.py`](examples/threshold_editor.py)
+
+单组灰度阈值（0–255），左侧显示摄像头画面、右侧显示二值结果，滑动滑块立即生效。
+
+![二值阈值编辑器](examples/screenshots/threshold_editor.png)
+
+### 多颜色 LAB 阈值编辑器
+
+[`examples/multi_color_threshold.py`](examples/multi_color_threshold.py)
+
+参考 MaixCDK 的 `app_find_blobs`：支持红 / 绿 / 蓝三组颜色阈值，当前颜色
+6 个 LAB 滑块，以及三种视图：
+
+- `Original` — 摄像头原图
+- `Binary All` — 三组颜色阈值合并
+- `Selected` — 只显示当前选中颜色
+
+`Print` 会把完整阈值表输出到 stdout。滑块相互独立、调整立即生效；min/max
+拖反时不会匹配任何像素。
+
+![多颜色 LAB 阈值编辑器](examples/screenshots/multi_color_threshold.png)
+
+在设备上运行：
+
+```bash
+python examples/threshold_editor.py
+python examples/multi_color_threshold.py
+```
+
 ## 使用 FreeType 显示中文
 
 LVGL 内置的 Montserrat 字体只覆盖拉丁字符。构建时会启用 `LV_USE_FREETYPE`
