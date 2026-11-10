@@ -358,7 +358,7 @@ python3.11 setup.py bdist_wheel --board maixcam
 `maixcam`/`maixcam2`，或环境变量 `MAIX_BOARD`。默认是 `maixcam2`。
 
 > **MaixCAM 构建未测试。** `maixcam` wheel 的目标是
-> `cp311-linux_riscv64`，仅为完整性提供；只有 MaixCAM2 构建在硬件上验证过。
+> `cp311-musllinux_1_2_riscv64`，仅为完整性提供；只有 MaixCAM2 构建在硬件上验证过。
 
 流程：
 
@@ -371,7 +371,7 @@ python3.11 setup.py bdist_wheel --board maixcam
 4. 按目标平台打包：
    - MaixCAM2：`cp313-manylinux2014_aarch64`，
      `lvgl.cpython-313-aarch64-linux-gnu.so`
-   - MaixCAM：`cp311-linux_riscv64`，`lvgl.so`
+   - MaixCAM：`cp311-musllinux_1_2_riscv64`，`lvgl.so`
    两者都包含 `maix_lvgl/`（`__init__.py`、`driver.py`、扩展）和
    `dl_lib/libdatachannel.so`。
 

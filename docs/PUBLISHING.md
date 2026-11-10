@@ -87,8 +87,12 @@ python3.11 setup.py bdist_wheel --board maixcam
 
 ```text
 dist/maix_lvgl-0.1.0-cp313-cp313-manylinux2014_aarch64.whl
-dist/maix_lvgl-0.1.0-cp311-cp311-linux_riscv64.whl
+dist/maix_lvgl-0.1.0-cp311-cp311-musllinux_1_2_riscv64.whl
 ```
+
+> PyPI 不接受裸 `linux_riscv64` 标签（会返回 400 unsupported platform tag）。
+> MaixCAM 运行 musl 1.2.2，因此 wheel 使用 `musllinux_1_2_riscv64`；pip 在
+> 设备上按 musllinux 标签匹配。
 
 如果 MaixCDK 已经构建过、只想重新打包（例如只改了 README/元数据）：
 
@@ -195,7 +199,7 @@ python3 -m pip install --force-reinstall --no-deps maix-lvgl
 | 设备 | wheel tag |
 | --- | --- |
 | MaixCAM2 | `cp313-cp313-manylinux2014_aarch64` |
-| MaixCAM | `cp311-cp311-linux_riscv64` |
+| MaixCAM | `cp311-cp311-musllinux_1_2_riscv64` |
 
 如果提示 `No matching distribution found`，先在设备上查看 pip 支持的标签：
 
@@ -203,7 +207,7 @@ python3 -m pip install --force-reinstall --no-deps maix-lvgl
 python3 -m pip debug --verbose
 ```
 
-确认 `cp311-linux_riscv64` 或 `cp313-manylinux2014_aarch64` 在列表中。
+确认 `cp311-musllinux_1_2_riscv64` 或 `cp313-manylinux2014_aarch64` 在列表中。
 
 ---
 

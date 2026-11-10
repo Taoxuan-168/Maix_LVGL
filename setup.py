@@ -71,7 +71,10 @@ BOARD_INFO = {
     "maixcam": {
         "host_python": (3, 11),
         "python_tag": "cp311",
-        "platform": "linux_riscv64",
+        # MaixCAM runs musl 1.2.2 (T-Head toolchain sysroot).  PyPI rejects
+        # bare "linux_riscv64" wheels, and musllinux is what pip matches on
+        # the device, so tag the wheel with the musl ABI.
+        "platform": "musllinux_1_2_riscv64",
         # Python 3.11 on musl accepts the generic .so suffix.
         "ext_name": "lvgl.so",
         "config": "configs/config_platform_maixcam.mk",

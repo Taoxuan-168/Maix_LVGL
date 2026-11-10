@@ -369,7 +369,7 @@ python3.11 setup.py bdist_wheel --board maixcam
 is `maixcam2`.
 
 > **MaixCAM build is untested.**  The `maixcam` wheel targets
-> `cp311-linux_riscv64` and is provided for completeness; only the MaixCAM2
+> `cp311-musllinux_1_2_riscv64` and is provided for completeness; only the MaixCAM2
 > build has been verified on hardware.
 
 What happens:
@@ -384,7 +384,7 @@ What happens:
 4. The wheel is packaged with the target tag:
    - MaixCAM2: `cp313-manylinux2014_aarch64`,
      `lvgl.cpython-313-aarch64-linux-gnu.so`
-   - MaixCAM: `cp311-linux_riscv64`, `lvgl.so`
+   - MaixCAM: `cp311-musllinux_1_2_riscv64`, `lvgl.so`
    Both contain `maix_lvgl/` (`__init__.py`, `driver.py`, the extension) and
    `dl_lib/libdatachannel.so`.
 
