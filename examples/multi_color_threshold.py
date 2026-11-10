@@ -15,7 +15,12 @@ after 10 seconds and writes multi_color_threshold.png into the run artifacts.
 import os
 import time
 
-from maix import app, camera, display, image, touchscreen
+from _common import deinit_lvgl, init_lvgl, need_exit, save_screenshot
+
+try:
+    from maix import camera
+except ImportError:
+    camera = None
 
 import maix_lvgl as lv
 
@@ -103,21 +108,20 @@ def save_debug_image(driver, name="multi_color_threshold.png"):
     art = os.path.join(RUN_DIR, "artifacts")
     os.makedirs(art, exist_ok=True)
     path = os.path.join(art, name)
-    img = image.from_bytes(
-        driver.width,
-        driver.height,
-        image.Format.FMT_BGRA8888,
-        bytes(driver._buffer),
-        True,
-    )
-    img.save(path)
-    print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
+    if save_screenshot(driver, path):
+        print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
 
 
 def main():
+    if camera is None:
+        print(
+            "This example requires the MaixPy camera; run it on MaixCAM/MaixCAM2.",
+            flush=True,
+        )
+        return
+
     cam = camera.Camera(WIDTH, HEIGHT)
-    disp = display.Display()
-    ts = touchscreen.TouchScreen()
+    disp = ts = None
     driver = None
     start = time.monotonic()
     frames = 0
@@ -125,7 +129,7 @@ def main():
     try:
         # Debug captures run without touch input so a noisy touch panel does
         # not move the sliders while the screenshot is being taken.
-        driver = lv.init(disp, False if DEBUG_IMAGES else ts)
+        driver, disp, ts = init_lvgl(touch=not DEBUG_IMAGES)
         scr = lv.screen_active()
         style_panel(scr, BG)
 
@@ -258,7 +262,7 @@ def main():
         status_label.set_text("Editing Red")
 
         # ------------------------------------------------------------ main loop
-        while not app.need_exit() and running[0]:
+        while not need_exit() and running[0]:
             # Process LVGL input first so a slider change applies to this
             # frame instead of the next one.
             lv.timer_handler()
@@ -293,10 +297,8 @@ def main():
             time.sleep(0.005)
 
     finally:
-        lv.deinit()
+        deinit_lvgl(driver, disp, ts)
         cam.close()
-        ts.close()
-        disp.close()
 
 
 if __name__ == "__main__":

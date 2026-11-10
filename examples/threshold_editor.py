@@ -13,7 +13,12 @@ after 10 seconds and writes threshold_editor.png into the skill run artifacts.
 import os
 import time
 
-from maix import app, camera, display, image, touchscreen
+from _common import deinit_lvgl, init_lvgl, need_exit, save_screenshot
+
+try:
+    from maix import camera
+except ImportError:
+    camera = None
 
 import maix_lvgl as lv
 
@@ -62,27 +67,26 @@ def save_debug_image(driver, name="threshold_editor.png"):
     art = os.path.join(RUN_DIR, "artifacts")
     os.makedirs(art, exist_ok=True)
     path = os.path.join(art, name)
-    img = image.from_bytes(
-        driver.width,
-        driver.height,
-        image.Format.FMT_BGRA8888,
-        bytes(driver._buffer),
-        True,
-    )
-    img.save(path)
-    print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
+    if save_screenshot(driver, path):
+        print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
 
 
 def main():
+    if camera is None:
+        print(
+            "This example requires the MaixPy camera; run it on MaixCAM/MaixCAM2.",
+            flush=True,
+        )
+        return
+
     cam = camera.Camera(WIDTH, HEIGHT)
-    disp = display.Display()
-    ts = touchscreen.TouchScreen()
+    disp = ts = None
     driver = None
     start = time.monotonic()
     frames = 0
 
     try:
-        driver = lv.init(disp, ts)
+        driver, disp, ts = init_lvgl()
         scr = lv.screen_active()
         style_panel(scr, BG)
 
@@ -162,7 +166,7 @@ def main():
         exit_btn.add_event_cb(on_exit, lv.EVENT.CLICKED, None)
         KEEP.append(on_exit)
 
-        while not app.need_exit() and running[0]:
+        while not need_exit() and running[0]:
             img = cam.read()
             if img is None:
                 lv.timer_handler()
@@ -193,10 +197,8 @@ def main():
             time.sleep(0.005)
 
     finally:
-        lv.deinit()
+        deinit_lvgl(driver, disp, ts)
         cam.close()
-        ts.close()
-        disp.close()
 
 
 if __name__ == "__main__":

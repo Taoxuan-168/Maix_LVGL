@@ -10,7 +10,7 @@ import math
 import os
 import time
 
-from maix import app, display, image, touchscreen
+from _common import HAS_MAIX, deinit_lvgl, init_lvgl, need_exit, save_screenshot
 
 import maix_lvgl as lv
 
@@ -104,12 +104,8 @@ def save_debug(driver, name="neon_dashboard.png"):
     art = os.path.join(RUN_DIR, "artifacts")
     os.makedirs(art, exist_ok=True)
     path = os.path.join(art, name)
-    img = image.from_bytes(
-        driver.width, driver.height, image.Format.FMT_BGRA8888,
-        bytes(driver._buffer), True,
-    )
-    img.save(path)
-    print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
+    if save_screenshot(driver, path):
+        print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
 
 
 def open_history(scr, co2_value):
@@ -247,22 +243,22 @@ def build_time_card(scr, x, y):
 
 def main():
     global zh, ui_font, ui_font_small
-    disp = display.Display()
-    ts = touchscreen.TouchScreen()
+    disp = ts = None
     driver = None
     font = None
     font_small = None
     try:
-        driver = lv.init(disp, ts)
+        driver, disp, ts = init_lvgl()
         scr = lv.screen_active()
         scr.set_style_bg_color(color(BG), 0)
         scr.set_style_bg_opa(lv.OPA.COVER, 0)
 
-        font = lv.freetype_font_create(FONT_PATH, 0, 20, 0)
-        font_small = lv.freetype_font_create(FONT_PATH, 0, 12, 0)
-        zh = font is not None
-        ui_font = font
-        ui_font_small = font_small or font or lv.font_montserrat_12
+        if HAS_MAIX:
+            font = lv.freetype_font_create(FONT_PATH, 0, 20, 0)
+            font_small = lv.freetype_font_create(FONT_PATH, 0, 12, 0)
+            zh = font is not None
+            ui_font = font
+            ui_font_small = font_small or font or lv.font_montserrat_12
 
         header = panel(scr, 0, 0, 640, 52, BG, radius=0)
         label(header, "AURA", 14, 8, lv.font_montserrat_24, GREEN)
@@ -293,7 +289,7 @@ def main():
         last_update = start
         last_shot = start
         phase = 0.0
-        while not app.need_exit() and running[0]:
+        while not need_exit() and running[0]:
             lv.timer_handler()
             now = time.monotonic()
 
@@ -339,16 +335,7 @@ def main():
                 font.freetype_font_delete()
             except Exception:
                 pass
-        if driver is not None:
-            lv.deinit()
-        try:
-            ts.close()
-        except Exception:
-            pass
-        try:
-            disp.close()
-        except Exception:
-            pass
+        deinit_lvgl(driver, disp, ts)
 
 
 if __name__ == "__main__":

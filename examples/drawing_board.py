@@ -17,7 +17,12 @@ import math
 import os
 import time
 
-from maix import app, display, image, touchscreen
+from _common import deinit_lvgl, init_lvgl, need_exit, save_screenshot
+
+try:
+    from maix import image
+except ImportError:
+    image = None
 
 import maix_lvgl as lv
 
@@ -100,25 +105,17 @@ def save_debug_image(driver, name="drawing_board.png"):
     art = os.path.join(RUN_DIR, "artifacts")
     os.makedirs(art, exist_ok=True)
     path = os.path.join(art, name)
-    img = image.from_bytes(
-        driver.width,
-        driver.height,
-        image.Format.FMT_BGRA8888,
-        bytes(driver._buffer),
-        True,
-    )
-    img.save(path)
-    print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
+    if save_screenshot(driver, path):
+        print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
 
 
 def main():
-    disp = display.Display()
-    ts = touchscreen.TouchScreen()
+    disp = ts = None
     driver = None
     start = time.monotonic()
 
     try:
-        driver = lv.init(disp, ts)
+        driver, disp, ts = init_lvgl()
         scr = lv.screen_active()
         style_panel(scr, BG)
 
@@ -212,14 +209,21 @@ def main():
             dirty[0] = True
 
         def on_save(event):
-            img = image.from_bytes(
-                CANVAS_W,
-                CANVAS_H,
-                image.Format.FMT_BGRA8888,
-                bytes(canvas_buf),
-                True,
-            )
-            img.save(SAVE_PATH)
+            if image is not None:
+                img = image.from_bytes(
+                    CANVAS_W,
+                    CANVAS_H,
+                    image.Format.FMT_BGRA8888,
+                    bytes(canvas_buf),
+                    True,
+                )
+                img.save(SAVE_PATH)
+            else:
+                from PIL import Image
+
+                Image.frombytes(
+                    "RGBA", (CANVAS_W, CANVAS_H), bytes(canvas_buf), "raw", "BGRA"
+                ).save(SAVE_PATH)
             print(f"saved {SAVE_PATH}", flush=True)
 
         def on_exit(event):
@@ -472,7 +476,7 @@ def main():
             overlay.remove_flag(lv.OBJ_FLAG.HIDDEN)
 
         # ------------------------------------------------------------ main loop
-        while not app.need_exit() and running[0]:
+        while not need_exit() and running[0]:
             lv.timer_handler()
             if dirty[0]:
                 canvas.invalidate()
@@ -485,9 +489,7 @@ def main():
             time.sleep(0.005)
 
     finally:
-        lv.deinit()
-        ts.close()
-        disp.close()
+        deinit_lvgl(driver, disp, ts)
 
 
 if __name__ == "__main__":

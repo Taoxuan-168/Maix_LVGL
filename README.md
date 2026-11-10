@@ -144,6 +144,19 @@ docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
 ```
 
 
+The UI examples (`demo.py`, `showcase.py`, `tile_dashboard.py`,
+`neon_dashboard.py`, `music_player.py`, `watchface.py`, `drawing_board.py`) run
+on desktop Linux as well:
+
+```bash
+cd examples
+python demo.py
+```
+
+The camera examples (`threshold_editor.py`, `multi_color_threshold.py`) require
+the MaixPy camera and print a hint on desktop Linux.
+
+
 ## Feature showcase
 
 `examples/showcase.py` is a four-page interactive demo:

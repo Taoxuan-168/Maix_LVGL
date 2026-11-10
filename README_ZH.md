@@ -141,6 +141,19 @@ docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
 ```
 
 
+以下 UI 示例（`demo.py`、`showcase.py`、`tile_dashboard.py`、
+`neon_dashboard.py`、`music_player.py`、`watchface.py`、`drawing_board.py`）在
+桌面 Linux 上同样可以运行：
+
+```bash
+cd examples
+python demo.py
+```
+
+摄像头示例（`threshold_editor.py`、`multi_color_threshold.py`）需要 MaixPy
+摄像头，在桌面 Linux 上会打印提示并退出。
+
+
 ## 功能演示
 
 `examples/showcase.py` 是一个四页可交互演示：

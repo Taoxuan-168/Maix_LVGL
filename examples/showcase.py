@@ -18,7 +18,7 @@ import math
 import os
 import time
 
-from maix import app, display, image, touchscreen
+from _common import deinit_lvgl, init_lvgl, need_exit, save_screenshot
 
 import maix_lvgl as lv
 
@@ -97,15 +97,8 @@ def save_debug_image(driver, name="showcase.png"):
     art = os.path.join(RUN_DIR, "artifacts")
     os.makedirs(art, exist_ok=True)
     path = os.path.join(art, name)
-    img = image.from_bytes(
-        driver.width,
-        driver.height,
-        image.Format.FMT_BGRA8888,
-        bytes(driver._buffer),
-        True,
-    )
-    img.save(path)
-    print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
+    if save_screenshot(driver, path):
+        print(f"MAIXPY_SKILL_IMAGE {path}", flush=True)
 
 
 # ------------------------------------------------------------------ pages
@@ -427,11 +420,10 @@ def build_canvas_page(page):
 
 # ------------------------------------------------------------------- main
 def main():
-    disp = display.Display()
-    ts = touchscreen.TouchScreen()
+    disp = ts = None
     driver = None
     try:
-        driver = lv.init(disp, ts)
+        driver, disp, ts = init_lvgl()
         screen = lv.screen_active()
         width, height = driver.width, driver.height
         style_panel(screen, BG, pad=0)
@@ -500,7 +492,7 @@ def main():
         fps = 0.0
         chart_phase = 0.0
 
-        while not app.need_exit() and running[0]:
+        while not need_exit() and running[0]:
             lv.timer_handler()
             frames += 1
             now = time.monotonic()
@@ -551,16 +543,7 @@ def main():
 
         save_debug_image(driver)
     finally:
-        if driver is not None:
-            lv.deinit()
-        try:
-            ts.close()
-        except Exception:
-            pass
-        try:
-            disp.close()
-        except Exception:
-            pass
+        deinit_lvgl(driver, disp, ts)
 
 
 if __name__ == "__main__":
