@@ -14,3 +14,7 @@ binding/.binding_stamp.json
 docs/api/
 
 docs/out/
+linux/binding/
+linux/build_lvgl/
+linux/wheel/
+pc_conf/

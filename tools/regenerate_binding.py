@@ -158,7 +158,17 @@ def _run_generator(work: Path) -> None:
     raise RuntimeError("binding generation did not converge after 40 prune rounds")
 
 
-def _generate(lvgl_dir: Path, conf: Path, inputs: dict, log=print) -> None:
+def _generate(
+    lvgl_dir: Path,
+    conf: Path,
+    inputs: dict,
+    log=print,
+    out_dir: Path | None = None,
+    stamp_file: Path | None = None,
+) -> None:
+    out_dir = out_dir or BINDING_DIR
+    if stamp_file is None and out_dir == BINDING_DIR:
+        stamp_file = STAMP_FILE
     try:
         import pycparser  # noqa: F401
     except ImportError as exc:
@@ -186,12 +196,13 @@ def _generate(lvgl_dir: Path, conf: Path, inputs: dict, log=print) -> None:
     _run_generator(WORK_DIR)
     _patch_generated_c(WORK_DIR / "generated" / "lvgl_python.c")
 
-    BINDING_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(WORK_DIR / "generated" / "lvgl_python.c", BINDING_DIR / "lvgl_python.c")
-    shutil.copy2(WORK_DIR / "generated" / "lvgl.pyi", BINDING_DIR / "lvgl.pyi")
-    shutil.copy2(WORK_DIR / "lv_conf.h", BINDING_DIR / "lv_conf.h")
-    STAMP_FILE.write_text(json.dumps(inputs, indent=2) + "\n", encoding="utf-8")
-    log("binding updated: binding/lvgl_python.c")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(WORK_DIR / "generated" / "lvgl_python.c", out_dir / "lvgl_python.c")
+    shutil.copy2(WORK_DIR / "generated" / "lvgl.pyi", out_dir / "lvgl.pyi")
+    shutil.copy2(WORK_DIR / "lv_conf.h", out_dir / "lv_conf.h")
+    if stamp_file is not None:
+        stamp_file.write_text(json.dumps(inputs, indent=2) + "\n", encoding="utf-8")
+    log(f"binding updated: {out_dir / 'lvgl_python.c'}")
 
 
 def ensure_binding(force: bool = False, log=print, sdk_path=None):

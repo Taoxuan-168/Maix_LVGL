@@ -51,7 +51,18 @@ finally:
     if _pkg_dir in sys.path:
         sys.path.remove(_pkg_dir)
 
-from .driver import DisplayDriver, TouchDriver
+try:
+    import maix  # noqa: F401
+    _HAS_MAIX = True
+except ImportError:
+    _HAS_MAIX = False
+
+if _HAS_MAIX:
+    from .driver import DisplayDriver, TouchDriver
+else:
+    # Desktop Linux / WSL: use LVGL's SDL window driver.
+    from .linux_driver import LinuxDriver as DisplayDriver
+    TouchDriver = None
 
 __version__ = "0.1.0"
 
@@ -78,12 +89,22 @@ def init(display=None, touchscreen=None, width=None, height=None):
     if _initialized:
         raise RuntimeError("maix_lvgl is already initialized")
 
+    if not _HAS_MAIX:
+        # Desktop Linux: lv.init(width, height) is the natural call.
+        if isinstance(display, int) and not isinstance(display, bool) and width is None:
+            width = display
+        if isinstance(touchscreen, int) and not isinstance(touchscreen, bool) and height is None:
+            height = touchscreen
+
     _lvgl.init()
     global _last_tick
     _last_tick = time.monotonic()
-    _display_driver = DisplayDriver(display, width, height)
-    if touchscreen is not False:
-        _touch_driver = TouchDriver(touchscreen, _display_driver._disp)
+    if _HAS_MAIX:
+        _display_driver = DisplayDriver(display, width, height)
+        if touchscreen is not False:
+            _touch_driver = TouchDriver(touchscreen, _display_driver._disp)
+    else:
+        _display_driver = DisplayDriver(width or 640, height or 480)
     _initialized = True
     return _display_driver
 
@@ -112,13 +133,21 @@ def process():
 
 
 def run(fps=60):
-    """Run the LVGL loop until MaixPy asks the application to exit."""
-    from maix import app
-
+    """Run the LVGL loop until MaixPy exits or Ctrl+C is pressed."""
     period = 1.0 / fps
-    while not app.need_exit():
-        timer_handler()
-        time.sleep(period)
+    if _HAS_MAIX:
+        from maix import app
+
+        while not app.need_exit():
+            timer_handler()
+            time.sleep(period)
+    else:
+        try:
+            while True:
+                timer_handler()
+                time.sleep(period)
+        except KeyboardInterrupt:
+            pass
 
 
 def deinit():
