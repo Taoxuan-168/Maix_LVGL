@@ -1,4 +1,4 @@
-# maix_lvgl 文档
+# Maix_LVGL 文档
 
 本目录包含 LVGL API 文档（`api/`，由构建生成）和 PyPI 发布说明。
 

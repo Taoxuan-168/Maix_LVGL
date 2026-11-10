@@ -1,9 +1,9 @@
 {
     "locale": "en",
     "navbar": {
-        "title": "maix_lvgl",
+        "title": "Maix_LVGL",
         "logo": {
-            "alt": "maix_lvgl logo",
+            "alt": "Maix_LVGL logo",
             "url": ""
         },
         "home_url": "/",

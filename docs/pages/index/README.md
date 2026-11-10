@@ -1,9 +1,9 @@
 ---
-title: maix_lvgl
+title: Maix_LVGL
 id: home_page
 ---
 
-# maix_lvgl
+# Maix_LVGL
 
 LVGL 9.1 bindings for MaixPy on MaixCAM / MaixCAM2.
 
