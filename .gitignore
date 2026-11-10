@@ -18,3 +18,6 @@ linux/binding/
 linux/build_lvgl/
 linux/wheel/
 pc_conf/
+
+windows/binding/
+windows/wheel/

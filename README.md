@@ -2,7 +2,8 @@
 
 [中文文档](README_ZH.md) | English
 
-LVGL bindings for MaixPy on MaixCAM/MaixCAM2 and desktop Linux (x86_64, SDL)
+LVGL bindings for MaixPy on MaixCAM/MaixCAM2 and desktop Linux / Windows
+(x86_64, SDL)
 with the MicroPython-style API.  The MaixPy build is a standard **MaixCDK
 project**: the LVGL library is downloaded and built by MaixCDK, the binding is
 generated from that source, and `setup.py` packages the result the same way
@@ -27,7 +28,7 @@ python3 -m pip install maix-lvgl
 ```
 
 `pip` selects the wheel that matches the platform (MaixCAM2: aarch64 / Python
-3.13, MaixCAM: RISC-V 64 / Python 3.11, desktop Linux: x86_64 / Python 3.13).
+3.13, MaixCAM: RISC-V 64 / Python 3.11, desktop Linux / Windows: x86_64 / Python 3.13).
 The import name is `maix_lvgl`:
 
 ```python
@@ -99,7 +100,7 @@ finally:
 ```
 
 
-## Desktop Linux (x86_64)
+## Desktop Linux / Windows (x86_64)
 
 On a normal x86_64 Linux desktop the same package uses LVGL's SDL window
 driver instead of MaixPy's display:
@@ -143,6 +144,31 @@ docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
   quay.io/pypa/manylinux_2_28_x86_64 bash tools/build_linux_manylinux.sh
 ```
 
+
+### Windows
+
+The `win_amd64` wheel is cross-compiled with mingw-w64 and bundles
+`SDL2.dll`; it targets 64-bit Python 3.13.  The same SDL example above
+applies:
+
+```python
+lv.init(800, 600)
+```
+
+```bash
+python -m pip install maix-lvgl
+```
+
+The current Windows wheel has been cross-compiled on Linux and checked with
+PE dependency/export inspection, but has not been run on Windows hardware yet.
+
+Build it on Linux:
+
+```bash
+WIN_PY_DIR=/path/to/windows-python/tools \
+WIN_SDL_DIR=/path/to/SDL2/x86_64-w64-mingw32 \
+tools/build_windows.sh
+```
 
 The UI examples (`demo.py`, `showcase.py`, `tile_dashboard.py`,
 `neon_dashboard.py`, `music_player.py`, `watchface.py`, `drawing_board.py`) run
@@ -456,12 +482,16 @@ maix_lvgl/
 ├── maix_lvgl/               # Python backend + built extension (in the wheel)
 │   └── linux_driver.py      # SDL window backend for desktop Linux
 ├── linux/                   # desktop Linux lv_conf.h + generated binding
+├── windows/                 # Windows lv_conf.h + generated binding
 ├── tools/
 │   ├── maixcdk_lvgl.py      # locate MaixCDK / its LVGL source
 │   ├── regenerate_binding.py# regenerate binding from MaixCDK's LVGL (stamped)
 │   ├── regenerate_linux_binding.py
 │   ├── build_linux.sh       # native x86_64 SDL wheel
 │   ├── build_linux_manylinux.sh
+│   ├── regenerate_windows_binding.py
+│   ├── build_windows.sh
+│   ├── build_windows_wheel.py
 │   └── omnipython_lvgl/     # vendored generator (MIT)
 ├── configs/config_platform_maixcam2.mk
 ├── setup.py                 # project.py build + wheel packaging (like MaixPy)
@@ -628,6 +658,9 @@ yourself.
 - Desktop Linux: built in `manylinux_2_28` (glibc 2.28), installed in WSL
   with Python 3.13; `lv.init(800, 600)` created an 800×600 SDL window and ran
   about 290 frames in 3 s.
+- Windows: `lvgl.cp313-win_amd64.pyd` cross-compiled with mingw-w64, links
+  `python313.dll` and `SDL2.dll`, exports `PyInit_lvgl`; not run on Windows
+  hardware yet.
 
 ## Known limitations
 
@@ -641,6 +674,8 @@ yourself.
 - **Desktop Linux**: x86_64 only; the manylinux wheel needs glibc 2.28+.
   The bare `linux_x86_64` wheel is only on GitHub Releases (PyPI rejects that
   tag) and requires the system SDL2 runtime.
+- **Windows**: x64 / Python 3.13 only; the wheel is cross-compiled on Linux
+  and has not been verified on Windows hardware yet.
 
 ## Binding fixes (2026-11)
 

@@ -2,7 +2,8 @@
 
 [English](README.md) | 中文
 
-面向 MaixPy（MaixCAM/MaixCAM2）和桌面 Linux（x86_64，SDL）的 LVGL 绑定，
+面向 MaixPy（MaixCAM/MaixCAM2）和桌面 Linux / Windows（x86_64，SDL）的
+LVGL 绑定，
 API 与 MicroPython 的 `lvgl` 写法一致。MaixPy 部分是一个**标准 MaixCDK
 工程**：LVGL 由 MaixCDK 自动下载并编译，绑定基于 MaixCDK 的 LVGL 源码生成，
 `setup.py` 按 MaixPy 的方式打包 wheel。
@@ -25,7 +26,7 @@ python3 -m pip install maix-lvgl
 ```
 
 `pip` 会自动选择与平台匹配的 wheel（MaixCAM2：aarch64 / Python 3.13；
-MaixCAM：RISC-V 64 / Python 3.11；桌面 Linux：x86_64 / Python 3.13）。
+MaixCAM：RISC-V 64 / Python 3.11；桌面 Linux / Windows：x86_64 / Python 3.13）。
 导入名是 `maix_lvgl`：
 
 ```python
@@ -96,7 +97,7 @@ finally:
 ```
 
 
-## 桌面 Linux（x86_64）
+## 桌面 Linux / Windows（x86_64）
 
 在普通 x86_64 Linux 桌面上，同一个包会自动使用 LVGL 的 SDL 窗口驱动，而不是
 MaixPy 的 display：
@@ -140,6 +141,30 @@ docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
   quay.io/pypa/manylinux_2_28_x86_64 bash tools/build_linux_manylinux.sh
 ```
 
+
+### Windows
+
+`win_amd64` wheel 使用 mingw-w64 交叉编译，内置 `SDL2.dll`，面向 64 位
+Python 3.13。上面的 SDL 示例同样适用：
+
+```python
+lv.init(800, 600)
+```
+
+```bash
+python -m pip install maix-lvgl
+```
+
+当前 Windows wheel 在 Linux 上交叉编译，并通过 PE 依赖/导出检查，但尚未在
+Windows 实机运行。
+
+在 Linux 上构建：
+
+```bash
+WIN_PY_DIR=/path/to/windows-python/tools \
+WIN_SDL_DIR=/path/to/SDL2/x86_64-w64-mingw32 \
+tools/build_windows.sh
+```
 
 以下 UI 示例（`demo.py`、`showcase.py`、`tile_dashboard.py`、
 `neon_dashboard.py`、`music_player.py`、`watchface.py`、`drawing_board.py`）在
@@ -443,12 +468,16 @@ maix_lvgl/
 ├── maix_lvgl/               # Python 后端 + 构建出的扩展（wheel 中）
 │   └── linux_driver.py      # 桌面 Linux 的 SDL 窗口后端
 ├── linux/                   # 桌面 Linux 的 lv_conf.h + 生成的绑定
+├── windows/                 # Windows 的 lv_conf.h + 生成的绑定
 ├── tools/
 │   ├── maixcdk_lvgl.py      # 定位 MaixCDK 及其 LVGL 源码
 │   ├── regenerate_binding.py# 从 MaixCDK 的 LVGL 重新生成绑定（带 stamp 缓存）
 │   ├── regenerate_linux_binding.py
 │   ├── build_linux.sh       # 本机 x86_64 SDL wheel 构建
 │   ├── build_linux_manylinux.sh
+│   ├── regenerate_windows_binding.py
+│   ├── build_windows.sh
+│   ├── build_windows_wheel.py
 │   └── omnipython_lvgl/     # 内置生成器（MIT）
 ├── configs/config_platform_maixcam2.mk
 ├── setup.py                 # project.py build + wheel 打包（模仿 MaixPy）
@@ -604,6 +633,8 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 - 桌面 Linux：在 `manylinux_2_28`（glibc 2.28）容器内构建，安装到 WSL 的
   Python 3.13；`lv.init(800, 600)` 成功创建 800×600 SDL 窗口，3 秒运行约
   290 帧。
+- Windows：`lvgl.cp313-win_amd64.pyd` 使用 mingw-w64 交叉编译，链接
+  `python313.dll` 和 `SDL2.dll`，导出 `PyInit_lvgl`；尚未在 Windows 实机运行。
 
 ## 已知限制
 
@@ -616,6 +647,8 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 - **桌面 Linux**：仅支持 x86_64；`manylinux` wheel 需要 glibc 2.28+。
   裸 `linux_x86_64` wheel 只放在 GitHub Release（PyPI 不接受该标签），并依赖
   系统的 SDL2 运行库。
+- **Windows**：仅支持 x64 / Python 3.13；wheel 在 Linux 上交叉编译，尚未在
+  Windows 实机验证。
 
 ## 绑定修复（2026-11）
 
