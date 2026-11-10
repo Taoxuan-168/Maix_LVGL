@@ -196,6 +196,23 @@ python examples/threshold_editor.py
 python examples/multi_color_threshold.py
 ```
 
+## 画板
+
+[`examples/drawing_board.py`](examples/drawing_board.py)
+
+触摸画板：5 个预设颜色、`+` 按钮打开自定义 HSV 色盘、笔刷大小、清屏、
+保存 PNG 和退出。画布 640×420，绘制时由 LVGL 指针输入设备写入 canvas 像素。
+
+![画板](examples/screenshots/drawing_board.png)
+
+在设备上运行：
+
+```bash
+python examples/drawing_board.py
+```
+
+保存的图片位于 `/root/drawing.png`。
+
 ## 使用 FreeType 显示中文
 
 LVGL 内置的 Montserrat 字体只覆盖拉丁字符。构建时会启用 `LV_USE_FREETYPE`

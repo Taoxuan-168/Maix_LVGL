@@ -206,6 +206,25 @@ python examples/threshold_editor.py
 python examples/multi_color_threshold.py
 ```
 
+## Drawing board
+
+[`examples/drawing_board.py`](examples/drawing_board.py)
+
+A touch drawing board with five preset colors, a custom HSV color wheel
+(open with the `+` button), brush size, clear, PNG export and exit.  The
+canvas is 640×420 and drawing writes pixels into an LVGL canvas from the
+pointer input device.
+
+![Drawing board](examples/screenshots/drawing_board.png)
+
+Run on the device:
+
+```bash
+python examples/drawing_board.py
+```
+
+Saved images are written to `/root/drawing.png`.
+
 ## Chinese text with FreeType
 
 LVGL's built-in Montserrat fonts only cover Latin.  The build enables
