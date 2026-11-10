@@ -2,9 +2,10 @@
 
 [English](README.md) | 中文
 
-面向 MaixPy（MaixCAM2）的 LVGL 绑定，API 与 MicroPython 的 `lvgl` 写法一致。
-本项目是一个**标准 MaixCDK 工程**：LVGL 由 MaixCDK 自动下载并编译，绑定基于
-MaixCDK 的 LVGL 源码生成，`setup.py` 按 MaixPy 的方式打包 wheel。
+面向 MaixPy（MaixCAM/MaixCAM2）和桌面 Linux（x86_64，SDL）的 LVGL 绑定，
+API 与 MicroPython 的 `lvgl` 写法一致。MaixPy 部分是一个**标准 MaixCDK
+工程**：LVGL 由 MaixCDK 自动下载并编译，绑定基于 MaixCDK 的 LVGL 源码生成，
+`setup.py` 按 MaixPy 的方式打包 wheel。
 
 ![maix_lvgl 在 MaixCAM2 上运行](docs/screenshot.png)
 
@@ -23,8 +24,9 @@ MaixCDK 的 LVGL 源码生成，`setup.py` 按 MaixPy 的方式打包 wheel。
 python3 -m pip install maix-lvgl
 ```
 
-`pip` 会自动选择与设备匹配的 wheel（MaixCAM2：aarch64 / Python 3.13；
-MaixCAM：RISC-V 64 / Python 3.11）。导入名是 `maix_lvgl`：
+`pip` 会自动选择与平台匹配的 wheel（MaixCAM2：aarch64 / Python 3.13；
+MaixCAM：RISC-V 64 / Python 3.11；桌面 Linux：x86_64 / Python 3.13）。
+导入名是 `maix_lvgl`：
 
 ```python
 import maix_lvgl as lv
@@ -45,7 +47,7 @@ python3 -m pip install --force-reinstall --no-deps \
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
-  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-linux_riscv64.whl
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-musllinux_1_2_riscv64.whl
 ```
 
 验证安装：
@@ -91,6 +93,51 @@ finally:
     lv.deinit()
     ts.close()
     disp.close()
+```
+
+
+## 桌面 Linux（x86_64）
+
+在普通 x86_64 Linux 桌面上，同一个包会自动使用 LVGL 的 SDL 窗口驱动，而不是
+MaixPy 的 display：
+
+```python
+import time
+import maix_lvgl as lv
+
+lv.init(800, 600)              # SDL 窗口尺寸
+scr = lv.screen_active()
+label = lv.label(scr)
+label.set_text("Hello from Linux")
+label.center()
+
+try:
+    while True:
+        lv.timer_handler()
+        time.sleep(0.01)
+except KeyboardInterrupt:
+    pass
+finally:
+    lv.deinit()
+```
+
+`maix_lvgl` 会检测 `maix` 是否可导入：在 MaixCAM 上继续使用
+`display.Display` + `touchscreen.TouchScreen`；其他环境则创建 SDL 窗口并接入
+鼠标、键盘输入。
+
+- PyPI 上的 `manylinux` wheel 已内置 SDL2，需要 glibc 2.28+
+  （Ubuntu 20.04+ / Debian 10+）。
+- GitHub Release 上的 `linux_x86_64` wheel 使用系统 `libSDL2-2.0.so.0`
+  （`sudo apt install libsdl2-2.0-0`）。
+
+构建桌面版：
+
+```bash
+tools/build_linux.sh
+
+# 可移植的 manylinux 构建（Docker）
+docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
+  quay.io/pypa/manylinux_2_28_x86_64 bash tools/build_linux_manylinux.sh
 ```
 
 
@@ -381,12 +428,18 @@ maix_lvgl/
 ├── binding/                 # 生成的 C 绑定 + pyi + lv_conf.h
 ├── runtime/                 # CPython 运行时胶水（lvpy_runtime.c/h）
 ├── maix_lvgl/               # Python 后端 + 构建出的扩展（wheel 中）
+│   └── linux_driver.py      # 桌面 Linux 的 SDL 窗口后端
+├── linux/                   # 桌面 Linux 的 lv_conf.h + 生成的绑定
 ├── tools/
 │   ├── maixcdk_lvgl.py      # 定位 MaixCDK 及其 LVGL 源码
 │   ├── regenerate_binding.py# 从 MaixCDK 的 LVGL 重新生成绑定（带 stamp 缓存）
+│   ├── regenerate_linux_binding.py
+│   ├── build_linux.sh       # 本机 x86_64 SDL wheel 构建
+│   ├── build_linux_manylinux.sh
 │   └── omnipython_lvgl/     # 内置生成器（MIT）
 ├── configs/config_platform_maixcam2.mk
 ├── setup.py                 # project.py build + wheel 打包（模仿 MaixPy）
+├── setup_linux.py           # 桌面 Linux wheel 打包
 └── dist/
 ```
 
@@ -408,6 +461,17 @@ python3.11 setup.py bdist_wheel --board maixcam
 
 `--board` 也支持 `-b maixcam`、`--board=maixcam`、位置参数
 `maixcam`/`maixcam2`，或环境变量 `MAIX_BOARD`。默认是 `maixcam2`。
+
+桌面 Linux（x86_64，SDL）：
+
+```bash
+# 本机构建（需要 libsdl2-dev 和 Python 头文件）
+tools/build_linux.sh
+
+# manylinux_2_28 容器构建（PyPI 兼容标签）
+docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
+  quay.io/pypa/manylinux_2_28_x86_64 bash tools/build_linux_manylinux.sh
+```
 
 > **MaixCAM 构建未测试。** `maixcam` wheel 的目标是
 > `cp311-musllinux_1_2_riscv64`，仅为完整性提供；只有 MaixCAM2 构建在硬件上验证过。
@@ -524,6 +588,9 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 - 触摸 indev：50 次 timer_handler 触发 25 次 read 回调；手动 `indev.read()`
   也正常。
 - 同一后端较早的构建：连续 74 次 `lv.EVENT.CLICKED` 命中、`lv.deinit()` 正常。
+- 桌面 Linux：在 `manylinux_2_28`（glibc 2.28）容器内构建，安装到 WSL 的
+  Python 3.13；`lv.init(800, 600)` 成功创建 800×600 SDL 窗口，3 秒运行约
+  290 帧。
 
 ## 已知限制
 
@@ -533,6 +600,9 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 - **点击目标**：触摸已验证，但控件本身要覆盖你实际触摸的区域。
 - **显示独占**：同一时间只能有一个 `maix.display.Display` 使用者，运行前需停止
   launcher 或其他应用。
+- **桌面 Linux**：仅支持 x86_64；`manylinux` wheel 需要 glibc 2.28+。
+  裸 `linux_x86_64` wheel 只放在 GitHub Release（PyPI 不接受该标签），并依赖
+  系统的 SDL2 运行库。
 
 ## 绑定修复（2026-11）
 

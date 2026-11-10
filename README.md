@@ -2,10 +2,11 @@
 
 [中文文档](README_ZH.md) | English
 
-LVGL bindings for MaixPy on MaixCAM2 with the MicroPython-style API. This is a
-standard **MaixCDK project**: the LVGL library is downloaded and built by
-MaixCDK, the binding is generated from that source, and `setup.py` packages the
-result the same way MaixPy does.
+LVGL bindings for MaixPy on MaixCAM/MaixCAM2 and desktop Linux (x86_64, SDL)
+with the MicroPython-style API.  The MaixPy build is a standard **MaixCDK
+project**: the LVGL library is downloaded and built by MaixCDK, the binding is
+generated from that source, and `setup.py` packages the result the same way
+MaixPy does.
 
 ![maix_lvgl on MaixCAM2](docs/screenshot.png)
 
@@ -25,8 +26,9 @@ Prebuilt wheel: [Releases](https://github.com/Taoxuan-168/Maix_LVGL/releases).
 python3 -m pip install maix-lvgl
 ```
 
-`pip` selects the wheel that matches the device (MaixCAM2: aarch64 / Python
-3.13, MaixCAM: RISC-V 64 / Python 3.11).  The import name is `maix_lvgl`:
+`pip` selects the wheel that matches the platform (MaixCAM2: aarch64 / Python
+3.13, MaixCAM: RISC-V 64 / Python 3.11, desktop Linux: x86_64 / Python 3.13).
+The import name is `maix_lvgl`:
 
 ```python
 import maix_lvgl as lv
@@ -47,7 +49,7 @@ python3 -m pip install --force-reinstall --no-deps \
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
-  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-linux_riscv64.whl
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-musllinux_1_2_riscv64.whl
 ```
 
 Verify the installation:
@@ -94,6 +96,51 @@ finally:
     lv.deinit()
     ts.close()
     disp.close()
+```
+
+
+## Desktop Linux (x86_64)
+
+On a normal x86_64 Linux desktop the same package uses LVGL's SDL window
+driver instead of MaixPy's display:
+
+```python
+import time
+import maix_lvgl as lv
+
+lv.init(800, 600)              # SDL window size
+scr = lv.screen_active()
+label = lv.label(scr)
+label.set_text("Hello from Linux")
+label.center()
+
+try:
+    while True:
+        lv.timer_handler()
+        time.sleep(0.01)
+except KeyboardInterrupt:
+    pass
+finally:
+    lv.deinit()
+```
+
+`maix_lvgl` detects whether `maix` is importable.  On MaixCAM it keeps using
+`display.Display` + `touchscreen.TouchScreen`; elsewhere it creates an SDL
+window with mouse and keyboard input.
+
+- The PyPI `manylinux` wheel bundles SDL2 and needs glibc 2.28+
+  (Ubuntu 20.04+ / Debian 10+).
+- The `linux_x86_64` wheel on GitHub Releases uses the system
+  `libSDL2-2.0.so.0` (`sudo apt install libsdl2-2.0-0`).
+
+Build the desktop wheel:
+
+```bash
+tools/build_linux.sh
+
+# portable manylinux build (Docker)
+docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
+  quay.io/pypa/manylinux_2_28_x86_64 bash tools/build_linux_manylinux.sh
 ```
 
 
@@ -394,12 +441,18 @@ maix_lvgl/
 ├── binding/                 # generated C binding + pyi + lv_conf.h
 ├── runtime/                 # CPython runtime glue (lvpy_runtime.c/h)
 ├── maix_lvgl/               # Python backend + built extension (in the wheel)
+│   └── linux_driver.py      # SDL window backend for desktop Linux
+├── linux/                   # desktop Linux lv_conf.h + generated binding
 ├── tools/
 │   ├── maixcdk_lvgl.py      # locate MaixCDK / its LVGL source
 │   ├── regenerate_binding.py# regenerate binding from MaixCDK's LVGL (stamped)
+│   ├── regenerate_linux_binding.py
+│   ├── build_linux.sh       # native x86_64 SDL wheel
+│   ├── build_linux_manylinux.sh
 │   └── omnipython_lvgl/     # vendored generator (MIT)
 ├── configs/config_platform_maixcam2.mk
 ├── setup.py                 # project.py build + wheel packaging (like MaixPy)
+├── setup_linux.py           # desktop Linux wheel packaging
 └── dist/
 ```
 
@@ -423,6 +476,17 @@ python3.11 setup.py bdist_wheel --board maixcam
 `--board` also accepts `-b maixcam`, `--board=maixcam`, a positional
 `maixcam`/`maixcam2`, or the `MAIX_BOARD` environment variable.  The default
 is `maixcam2`.
+
+Desktop Linux (x86_64, SDL):
+
+```bash
+# native build (needs libsdl2-dev and Python headers)
+tools/build_linux.sh
+
+# manylinux_2_28 container build (PyPI-compatible tag)
+docker run --rm -v "$PWD/..:/src" -w /src/maix_lvgl \
+  quay.io/pypa/manylinux_2_28_x86_64 bash tools/build_linux_manylinux.sh
+```
 
 > **MaixCAM build is untested.**  The `maixcam` wheel targets
 > `cp311-musllinux_1_2_riscv64` and is provided for completeness; only the MaixCAM2
@@ -548,6 +612,9 @@ yourself.
   `indev.read()` also wired correctly.
 - Earlier builds of the same backend: 74 consecutive `lv.EVENT.CLICKED`
   hits, clean `lv.deinit()`.
+- Desktop Linux: built in `manylinux_2_28` (glibc 2.28), installed in WSL
+  with Python 3.13; `lv.init(800, 600)` created an 800×600 SDL window and ran
+  about 290 frames in 3 s.
 
 ## Known limitations
 
@@ -558,6 +625,9 @@ yourself.
   area.
 - **Display ownership**: only one `maix.display.Display` user at a time; stop
   the launcher/other apps before `lv.init()`.
+- **Desktop Linux**: x86_64 only; the manylinux wheel needs glibc 2.28+.
+  The bare `linux_x86_64` wheel is only on GitHub Releases (PyPI rejects that
+  tag) and requires the system SDL2 runtime.
 
 ## Binding fixes (2026-11)
 
