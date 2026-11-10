@@ -21,7 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from setuptools import Distribution, Extension, setup
+from setuptools import Distribution, setup
 from setuptools.command.build_ext import build_ext
 
 try:
@@ -30,6 +30,42 @@ except ImportError:  # older setuptools
     from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
 ROOT = Path(__file__).resolve().parent
+GITHUB_URL = "https://github.com/Taoxuan-168/Maix_LVGL"
+RAW_URL = "https://raw.githubusercontent.com/Taoxuan-168/Maix_LVGL/main"
+
+
+def _read_version() -> str:
+    """Read the version from the package so it has a single source."""
+    text = (ROOT / "maix_lvgl" / "__init__.py").read_text(encoding="utf-8")
+    match = re.search(r'^__version__\s*=\s*"([^"]+)"', text, re.M)
+    if not match:
+        raise SystemExit("cannot find __version__ in maix_lvgl/__init__.py")
+    return match.group(1)
+
+
+def _readme_for_pypi() -> str:
+    """Turn README-relative links into absolute ones for the PyPI page.
+
+    PyPI renders the description outside the repository, so ``docs/...`` and
+    ``examples/...`` links would be dead there.  Images must point at the raw
+    files; other links point at the GitHub blob view.
+    """
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    text = re.sub(
+        r"(!\[[^\]]*\]\()(docs|examples)/([^)]+)\)",
+        lambda m: f"{m.group(1)}{RAW_URL}/{m.group(2)}/{m.group(3)})",
+        text,
+    )
+    text = re.sub(
+        r"(\[[^\]]*\]\()(docs|examples)/([^)]+)\)",
+        lambda m: f"{m.group(1)}{GITHUB_URL}/blob/main/{m.group(2)}/{m.group(3)})",
+        text,
+    )
+    text = text.replace(
+        "](README_ZH.md)", f"]({GITHUB_URL}/blob/main/README_ZH.md)"
+    )
+    return text
+
 
 BOARD_INFO = {
     "maixcam": {
@@ -205,6 +241,7 @@ class MaixCDKBuildExt(build_ext):
             print("-- building with MaixCDK:", " ".join(cmd))
             subprocess.check_call(cmd, cwd=ROOT)
         else:
+            _check_host_python()
             _ensure_build_dir(True)
 
         if not BUILT_LIB.is_file():
@@ -215,6 +252,10 @@ class MaixCDKBuildExt(build_ext):
 
         pkg_dir = Path(self.build_lib) / "maix_lvgl"
         pkg_dir.mkdir(parents=True, exist_ok=True)
+        # MaixCDK's project.py build cleans build/, which removes build_py's
+        # output; copy the Python sources again so the wheel is complete.
+        for source in (ROOT / "maix_lvgl").glob("*.py"):
+            shutil.copy2(source, pkg_dir / source.name)
         shutil.copy2(BUILT_LIB, pkg_dir / EXT_NAME)
 
         dl_dir = pkg_dir / "dl_lib"
@@ -230,29 +271,72 @@ class MaixLvglWheel(_bdist_wheel):
         if not getattr(self, "plat_name_supplied", False):
             self.plat_name = PLATFORM
             self.plat_name_supplied = True
-        # Force the target interpreter tag even when the host happens to be a
-        # different Python; the extension is cross-compiled for HOST_PYTHON.
-        self.python_tag = PY_TAG
-        self.abi_tag = PY_TAG
+        # bdist_wheel ignores python_tag/abi_tag for non-pure wheels and uses
+        # the running interpreter instead.  Build each board with its own host
+        # Python (maixcam: 3.11, maixcam2: 3.13); _check_host_python enforces it.
+
+    def run(self):
+        if self.skip_build:
+            # bdist_wheel --skip-build skips the whole build command, including
+            # build_py, which would produce a wheel without maix_lvgl/*.py.
+            # Only MaixCDK's project.py build should be skipped, so build the
+            # Python package and stage the prebuilt extension here.
+            self.run_command("build_py")
+            self.run_command("build_ext")
+        super().run()
 
 
 setup(
     name="maix-lvgl",
-    version="0.1.0",
+    version=_read_version(),
     description=(
         "LVGL bindings for MaixPy (MaixCAM / MaixCAM2), generated from "
         "MaixCDK's LVGL source with the omnipython-lvgl generator."
     ),
-    long_description=(ROOT / "README.md").read_text(encoding="utf-8"),
+    long_description=_readme_for_pypi(),
     long_description_content_type="text/markdown",
     author="Sipeed",
+    url=GITHUB_URL,
     license="MIT",
+    license_files=["LICENSE"],
+    keywords=[
+        "lvgl",
+        "maixpy",
+        "maixcam",
+        "maixcam2",
+        "sipeed",
+        "gui",
+        "embedded",
+        "microcontroller",
+    ],
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "Operating System :: POSIX :: Linux",
+        "Programming Language :: C",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.13",
+        "Topic :: Software Development :: Libraries",
+        "Topic :: Software Development :: User Interfaces",
+    ],
+    project_urls={
+        "Homepage": GITHUB_URL,
+        "Documentation": GITHUB_URL + "#readme",
+        "Source": GITHUB_URL,
+        "Issues": GITHUB_URL + "/issues",
+        "Releases": GITHUB_URL + "/releases",
+    },
     python_requires=">=3.11",
     packages=["maix_lvgl"],
     package_dir={"maix_lvgl": "maix_lvgl"},
     package_data={"maix_lvgl": ["*.so", "dl_lib/*.so*"]},
     include_package_data=True,
-    ext_modules=[Extension("lvgl", sources=[])],
+    # The extension is cross-compiled by MaixCDK and staged into the package
+    # by MaixCDKBuildExt.  No setuptools Extension is declared here, so the
+    # wheel metadata does not claim a top-level ``lvgl`` module; the
+    # BinaryDistribution class still marks this as a platform wheel.
+    ext_modules=[],
     cmdclass={"build_ext": MaixCDKBuildExt, "bdist_wheel": MaixLvglWheel},
     distclass=BinaryDistribution,
 )

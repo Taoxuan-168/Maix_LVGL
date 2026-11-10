@@ -17,16 +17,31 @@ MaixCDK 的 LVGL 源码生成，`setup.py` 按 MaixPy 的方式打包 wheel。
 
 ## 安装
 
+### PyPI（推荐）
+
+```bash
+python3 -m pip install maix-lvgl
+```
+
+`pip` 会自动选择与设备匹配的 wheel（MaixCAM2：aarch64 / Python 3.13；
+MaixCAM：RISC-V 64 / Python 3.11）。导入名是 `maix_lvgl`：
+
+```python
+import maix_lvgl as lv
+```
+
+### GitHub Release
+
 在设备上直接从 GitHub Release 安装预编译 wheel。
 
-### MaixCAM2（aarch64，Python 3.13）— 已测试
+#### MaixCAM2（aarch64，Python 3.13）— 已测试
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
   https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp313-cp313-manylinux2014_aarch64.whl
 ```
 
-### MaixCAM（RISC-V 64，Python 3.11）— 未测试
+#### MaixCAM（RISC-V 64，Python 3.11）— 未测试
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
