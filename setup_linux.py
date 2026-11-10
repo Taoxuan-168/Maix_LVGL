@@ -5,6 +5,7 @@ This does not build LVGL; run ``tools/regenerate_linux_binding.py`` and compile
 ``docs/README.md``).  The prebuilt files are staged in ``linux/wheel/``.
 """
 from pathlib import Path
+import os
 import re
 
 from setuptools import Distribution, setup
@@ -45,7 +46,7 @@ class NoopBuildExt(build_ext):
 class LinuxWheel(_bdist_wheel):
     def finalize_options(self):
         super().finalize_options()
-        self.plat_name = "linux_x86_64"
+        self.plat_name = os.environ.get("MAIX_LVGL_PLAT_NAME", "linux_x86_64")
         self.plat_name_supplied = True
 
 
