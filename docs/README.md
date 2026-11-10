@@ -1,3 +1,27 @@
+# maix_lvgl 文档
+
+本目录包含 LVGL API 文档（`api/`，由构建生成）和 PyPI 发布说明。
+
+## 本地预览 API 文档
+
+`api/` 是 `tools/gen_api_docs.py` 生成的构建产物，不提交到仓库。首次预览前先
+在仓库根目录构建：
+
+```bash
+python3 tools/gen_api_docs.py --pyi binding/lvgl.pyi --out docs/api
+```
+
+然后在 `docs/` 目录启动 teedoc：
+
+```bash
+cd docs
+./serve.sh
+```
+
+打开 <http://127.0.0.1:8000/api/>。如果 `api/` 不存在，`serve.sh` 会提示先构建。
+
+---
+
 # 发布到 PyPI
 
 本文说明如何把 `maix-lvgl` 的预编译 wheel 发布到 TestPyPI 和正式 PyPI。

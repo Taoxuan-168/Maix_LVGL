@@ -1,0 +1,51 @@
+{
+    "locale": "en",
+    "navbar": {
+        "title": "maix_lvgl",
+        "logo": {
+            "alt": "maix_lvgl logo",
+            "url": ""
+        },
+        "home_url": "/",
+        "items": [
+            {
+                "url": "/api/index.html",
+                "label": "API",
+                "position": "left"
+            },
+            {
+                "url": "https://github.com/Taoxuan-168/Maix_LVGL",
+                "label": "GitHub",
+                "position": "right",
+                "target": "_blank"
+            }
+        ]
+    },
+    "footer": {
+        "top": [
+            {
+                "label": "Links",
+                "items": [
+                    {
+                        "label": "GitHub repository",
+                        "url": "https://github.com/Taoxuan-168/Maix_LVGL",
+                        "target": "_blank"
+                    },
+                    {
+                        "label": "PyPI",
+                        "url": "https://pypi.org/project/maix-lvgl/",
+                        "target": "_blank"
+                    }
+                ]
+            }
+        ],
+        "bottom": [
+            {
+                "label": "MIT License",
+                "url": "https://github.com/Taoxuan-168/Maix_LVGL/blob/main/LICENSE",
+                "target": "_blank"
+            }
+        ]
+    },
+    "show_source": "Edit this page"
+}

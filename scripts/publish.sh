@@ -11,7 +11,7 @@
 #   export TWINE_PASSWORD=pypi-...        # API token (recommended)
 #   or configure ~/.pypirc
 #
-# See docs/PUBLISHING.md for the full release checklist.
+# See docs/README.md for the full release checklist.
 set -euo pipefail
 
 usage() {
@@ -63,7 +63,7 @@ else
 fi
 
 if [[ ${#wheels[@]} -eq 0 ]]; then
-  echo "error: no wheels in $dist; build them first (see docs/PUBLISHING.md)" >&2
+  echo "error: no wheels in $dist; build them first (see docs/README.md)" >&2
   exit 1
 fi
 

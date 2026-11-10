@@ -12,3 +12,5 @@ binding/.binding_stamp.json
 
 # Generated API documentation (recreated by setup.py)
 docs/api/
+
+docs/out/

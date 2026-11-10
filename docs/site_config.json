@@ -1,0 +1,41 @@
+{
+    "site_name": "maix_lvgl",
+    "site_slogon": "LVGL 9.1 bindings for MaixPy",
+    "site_root_url": "/",
+    "site_domain": "localhost",
+    "site_protocol": "http",
+    "config_template_dir": "config",
+    "source": "https://github.com/Taoxuan-168/Maix_LVGL/tree/main/docs",
+    "route": {
+        "docs": {
+            "/api/": "api"
+        },
+        "pages": {
+            "/": "pages/index"
+        },
+        "assets": {
+            "/static/": "static"
+        }
+    },
+    "plugins": {
+        "teedoc-plugin-markdown-parser": {
+            "from": "pypi",
+            "config": {
+            }
+        },
+        "teedoc-plugin-theme-default": {
+            "from": "pypi",
+            "config": {
+                "dark": true,
+                "show_print_page": true
+            }
+        },
+        "teedoc-plugin-search": {
+            "from": "pypi",
+            "config": {
+                "search_hint": "搜索"
+            }
+        }
+    },
+    "rebuild_changes_delay": 1
+}
