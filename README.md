@@ -17,6 +17,39 @@ The binding is generated with the generator from
 
 Prebuilt wheel: [Releases](https://github.com/Taoxuan-168/Maix_LVGL/releases).
 
+## Install
+
+Install the prebuilt wheel directly from the GitHub Release on the device.
+
+### MaixCAM2 (aarch64, Python 3.13) — tested
+
+```bash
+python3 -m pip install --force-reinstall --no-deps \
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp313-cp313-manylinux2014_aarch64.whl
+```
+
+### MaixCAM (RISC-V 64, Python 3.11) — untested
+
+```bash
+python3 -m pip install --force-reinstall --no-deps \
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-linux_riscv64.whl
+```
+
+Verify the installation:
+
+```python
+import maix_lvgl as lv
+print(lv.__version__)
+```
+
+Release page:
+<https://github.com/Taoxuan-168/Maix_LVGL/releases/tag/v0.1.0>
+
+> The MaixCAM wheel is built but **not tested on MaixCAM hardware**; only the
+> MaixCAM2 wheel has been verified.  If pip reports "not a supported wheel",
+> check the device platform and Python version (MaixCAM2: aarch64 / 3.13,
+> MaixCAM: RISC-V 64 / 3.11).
+
 ## Quick start
 
 ```python
