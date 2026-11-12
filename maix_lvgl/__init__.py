@@ -64,7 +64,7 @@ else:
     from .linux_driver import LinuxDriver as DisplayDriver
     TouchDriver = None
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 _display_driver = None
 _touch_driver = None
@@ -72,15 +72,19 @@ _initialized = False
 _last_tick = None
 
 
-def init(display=None, touchscreen=None, width=None, height=None):
+def init(display=None, touchscreen=None, width=None, height=None,
+         color_format=None, max_fps=0):
     """Initialize LVGL and attach MaixPy display/touchscreen.
 
     Args:
         display: a ``maix.display.Display`` instance. When omitted, a display
-            is opened in ``FMT_BGRA8888`` using the panel size.
+            is opened using the platform color format and the panel size.
         touchscreen: a ``maix.touchscreen.TouchScreen`` instance. When omitted,
             a touchscreen is opened. Pass ``False`` to run without touch input.
         width/height: panel size used only when opening an internal display.
+        color_format: ``"ARGB8888"`` (MaixCAM2) or ``"RGB888"``
+            (MaixCAM/Pro). When omitted it is selected from the architecture.
+        max_fps: cap full-screen flushes; 0 means no limit.
 
     Returns:
         The internal ``DisplayDriver``.
@@ -100,7 +104,11 @@ def init(display=None, touchscreen=None, width=None, height=None):
     global _last_tick
     _last_tick = time.monotonic()
     if _HAS_MAIX:
-        _display_driver = DisplayDriver(display, width, height)
+        _display_driver = DisplayDriver(
+            display, width, height, color_format=color_format
+        )
+        if max_fps:
+            _display_driver.set_max_fps(max_fps)
         if touchscreen is not False:
             _touch_driver = TouchDriver(touchscreen, _display_driver._disp)
     else:

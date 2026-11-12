@@ -255,13 +255,19 @@ class MaixCDKBuildExt(build_ext):
 
         pkg_dir = Path(self.build_lib) / "maix_lvgl"
         pkg_dir.mkdir(parents=True, exist_ok=True)
+        # Remove artifacts from a previous platform build: setup.py and
+        # setup_linux.py share build/lib.<host-platform> on a Linux host.
+        for stale in pkg_dir.glob("*.so"):
+            stale.unlink()
+        dl_dir = pkg_dir / "dl_lib"
+        if dl_dir.exists():
+            shutil.rmtree(dl_dir)
         # MaixCDK's project.py build cleans build/, which removes build_py's
         # output; copy the Python sources again so the wheel is complete.
         for source in (ROOT / "maix_lvgl").glob("*.py"):
             shutil.copy2(source, pkg_dir / source.name)
         shutil.copy2(BUILT_LIB, pkg_dir / EXT_NAME)
 
-        dl_dir = pkg_dir / "dl_lib"
         dl_dir.mkdir(exist_ok=True)
         datachannel = BUILT_DL_LIB / "libdatachannel.so"
         if datachannel.is_file():

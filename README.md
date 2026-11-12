@@ -662,11 +662,15 @@ yourself.
   `python313.dll` and `SDL2.dll`, exports `PyInit_lvgl`; not run on Windows
   hardware yet.
 
+- 0.1.1 on MaixCAM2: FreeType stress test passed 10/10 runs (3 sizes,
+  Chinese labels); 640×480 ARGB8888 selftest screenshot correct.
+
 ## Known limitations
 
 - **JPEG images**: upstream jpegio depends on LVGL 9.5 image-cache internals
   that do not exist in 9.1.0, so it is not compiled.
-- **Chinese text**: only Montserrat fonts are enabled (MaixCDK's LVGL config).
+- **Chinese text**: use `lv.freetype_font_create()`; the built-in
+  Montserrat fonts only cover Latin.
 - **Touch targets**: touch is verified; widgets must cover the actual touched
   area.
 - **Display ownership**: only one `maix.display.Display` user at a time; stop
@@ -676,6 +680,19 @@ yourself.
   tag) and requires the system SDL2 runtime.
 - **Windows**: x64 / Python 3.13 only; the wheel is cross-compiled on Linux
   and has not been verified on Windows hardware yet.
+
+## 0.1.1 fixes (2026-11)
+
+- **MaixCAM/Pro refresh performance** (#1): the display driver now selects
+  `RGB888`/`FMT_BGR888` on RISC-V automatically (MaixCAM/Pro VO rejects
+  BGRA8888) and keeps `ARGB8888`/`FMT_BGRA8888` on MaixCAM2.  `_flush()` uses
+  `image.from_bytes(..., copy=False)`, avoiding one extra full-frame copy per
+  refresh.  `lv.init(..., color_format=..., max_fps=...)` and
+  `driver.set_max_fps()` allow explicit control.
+- **FreeType glyph-cache hang** (#2): backported LVGL 9.2.0's per-node
+  `face_lock` into `tools/patch_lvgl.py`, serializing `FT_Face` access from
+  the LVGL render thread.  Verified on MaixCAM2 with 10/10 stress runs.
+- Version bumped to 0.1.1.
 
 ## Binding fixes (2026-11)
 

@@ -636,11 +636,15 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 - Windows：`lvgl.cp313-win_amd64.pyd` 使用 mingw-w64 交叉编译，链接
   `python313.dll` 和 `SDL2.dll`，导出 `PyInit_lvgl`；尚未在 Windows 实机运行。
 
+- 0.1.1 在 MaixCAM2 上：FreeType 压力测试连续 10 次全部通过（3 种字号、
+  中文标签）；640×480 ARGB8888 自检截图正常。
+
 ## 已知限制
 
 - **JPEG 图片**：上游 jpegio 依赖 LVGL 9.5 的 image-cache 内部结构，LVGL 9.1.0
   中不存在，因此未编译。
-- **中文显示**：只启用了 Montserrat 字体（MaixCDK 的 LVGL 配置如此）。
+- **中文显示**：使用 `lv.freetype_font_create()`；内置 Montserrat 字体只覆盖
+  拉丁字符。
 - **点击目标**：触摸已验证，但控件本身要覆盖你实际触摸的区域。
 - **显示独占**：同一时间只能有一个 `maix.display.Display` 使用者，运行前需停止
   launcher 或其他应用。
@@ -649,6 +653,19 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
   系统的 SDL2 运行库。
 - **Windows**：仅支持 x64 / Python 3.13；wheel 在 Linux 上交叉编译，尚未在
   Windows 实机验证。
+
+## 0.1.1 修复（2026-11）
+
+- **MaixCAM/Pro 刷新性能**（#1）：驱动在 RISC-V 上自动选择
+  `RGB888`/`FMT_BGR888`（MaixCAM/Pro 的 VO 不接受 BGRA8888），MaixCAM2 继续
+  使用 `ARGB8888`/`FMT_BGRA8888`。`_flush()` 改用
+  `image.from_bytes(..., copy=False)`，每次刷新少一次全屏拷贝。
+  `lv.init(..., color_format=..., max_fps=...)` 和 `driver.set_max_fps()`
+  可显式控制格式与刷新上限。
+- **FreeType 字形缓存卡死**（#2）：把 LVGL 9.2.0 的 per-node `face_lock`
+  移植到 `tools/patch_lvgl.py`，串行化渲染线程对 `FT_Face` 的访问。
+  MaixCAM2 上连续 10 次压力测试全部通过。
+- 版本更新到 0.1.1。
 
 ## 绑定修复（2026-11）
 
