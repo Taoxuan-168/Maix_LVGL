@@ -41,14 +41,14 @@ import maix_lvgl as lv
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
-  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp313-cp313-manylinux2014_aarch64.whl
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.1/maix_lvgl-0.1.1-cp313-cp313-manylinux2014_aarch64.whl
 ```
 
 #### MaixCAM（RISC-V 64，Python 3.11）— 未测试
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
-  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-musllinux_1_2_riscv64.whl
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.1/maix_lvgl-0.1.1-cp311-cp311-musllinux_1_2_riscv64.whl
 ```
 
 验证安装：
@@ -59,7 +59,7 @@ print(lv.__version__)
 ```
 
 Release 页面：
-<https://github.com/Taoxuan-168/Maix_LVGL/releases/tag/v0.1.0>
+<https://github.com/Taoxuan-168/Maix_LVGL/releases/tag/v0.1.1>
 
 > MaixCAM wheel 已构建但**未在 MaixCAM 硬件测试**；只有 MaixCAM2 wheel 验证过。
 > 如果 pip 提示 “not a supported wheel”，请确认设备平台和 Python 版本
@@ -653,41 +653,3 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
   系统的 SDL2 运行库。
 - **Windows**：仅支持 x64 / Python 3.13；wheel 在 Linux 上交叉编译，尚未在
   Windows 实机验证。
-
-## 0.1.1 修复（2026-11）
-
-- **MaixCAM/Pro 刷新性能**（#1）：驱动在 RISC-V 上自动选择
-  `RGB888`/`FMT_BGR888`（MaixCAM/Pro 的 VO 不接受 BGRA8888），MaixCAM2 继续
-  使用 `ARGB8888`/`FMT_BGRA8888`。`_flush()` 改用
-  `image.from_bytes(..., copy=False)`，每次刷新少一次全屏拷贝。
-  `lv.init(..., color_format=..., max_fps=...)` 和 `driver.set_max_fps()`
-  可显式控制格式与刷新上限。
-- **FreeType 字形缓存卡死**（#2）：把 LVGL 9.2.0 的 per-node `face_lock`
-  移植到 `tools/patch_lvgl.py`，串行化渲染线程对 `FT_Face` 的访问。
-  MaixCAM2 上连续 10 次压力测试全部通过。
-- 版本更新到 0.1.1。
-
-## 绑定修复（2026-11）
-
-在 MaixCAM2 上完成 API 全面测试后，修复了以下绑定问题：
-
-- `menu_page.set_page_title()` / `set_page_title_static()`（原先错误绑定到
-  `menu`，会释放野指针并崩溃）。
-- `image_decoder_t.delete()`、`scale_section_t.set_range()`、
-  `image_src_get_type()`、`image_decoder_create()`、`image_cache_resize()`、
-  `image_header_cache_resize()`、`image_cache_drop()`、`canvas_buf_size()`
-  按 C API 语义改为模块级函数。
-- 导出 `lv.ANIM_ENABLE`、`lv.SCREEN_LOAD_ANIM` 和 `lv.SYMBOL`。
-- 在 `maix_lvgl` 模块级提供 `anim_set_exec_cb(anim, cb)`（LVGL 的
-  `lv_anim_set_exec_cb` 没有 user_data 参数，原始绑定已隐藏）。回调形式为
-  `cb(anim, value)`；也可直接使用 `anim.set_custom_exec_cb()`。
-- `grid_dsc_array` 同时接受 list 和 `array.array`。
-- `remove_event_cb()` / `remove_event_cb_with_user_data()` 使用与
-  `add_event_cb` 相同的 trampoline，可正确匹配。
-- `observer.remove()` 不再遗留悬空的 `LV_EVENT_DELETE` 钩子（LVGL 9.1.0
-  上游修复，由 `tools/patch_lvgl.py` 应用）。
-- `canvas.copy_buf()` 同色格式复制不再死循环（同一上游修复）。
-- `obj.set_user_data()` / `timer.set_user_data()` / `anim.set_var()` /
-  `subject.init_pointer()` 支持传入 widget 对象；纯 Python int 仍不支持，
-  因为 LVGL 保存的是 `void *`。
-- 不再暴露 `font.set_kerning()`：内置 Montserrat 字体是只读数据，写入会崩溃。

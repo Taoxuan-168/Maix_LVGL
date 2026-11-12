@@ -43,14 +43,14 @@ Install the prebuilt wheel directly from the GitHub Release on the device.
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
-  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp313-cp313-manylinux2014_aarch64.whl
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.1/maix_lvgl-0.1.1-cp313-cp313-manylinux2014_aarch64.whl
 ```
 
 #### MaixCAM (RISC-V 64, Python 3.11) — untested
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps \
-  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.0/maix_lvgl-0.1.0-cp311-cp311-musllinux_1_2_riscv64.whl
+  https://github.com/Taoxuan-168/Maix_LVGL/releases/download/v0.1.1/maix_lvgl-0.1.1-cp311-cp311-musllinux_1_2_riscv64.whl
 ```
 
 Verify the installation:
@@ -61,7 +61,7 @@ print(lv.__version__)
 ```
 
 Release page:
-<https://github.com/Taoxuan-168/Maix_LVGL/releases/tag/v0.1.0>
+<https://github.com/Taoxuan-168/Maix_LVGL/releases/tag/v0.1.1>
 
 > The MaixCAM wheel is built but **not tested on MaixCAM hardware**; only the
 > MaixCAM2 wheel has been verified.  If pip reports "not a supported wheel",
@@ -680,45 +680,3 @@ yourself.
   tag) and requires the system SDL2 runtime.
 - **Windows**: x64 / Python 3.13 only; the wheel is cross-compiled on Linux
   and has not been verified on Windows hardware yet.
-
-## 0.1.1 fixes (2026-11)
-
-- **MaixCAM/Pro refresh performance** (#1): the display driver now selects
-  `RGB888`/`FMT_BGR888` on RISC-V automatically (MaixCAM/Pro VO rejects
-  BGRA8888) and keeps `ARGB8888`/`FMT_BGRA8888` on MaixCAM2.  `_flush()` uses
-  `image.from_bytes(..., copy=False)`, avoiding one extra full-frame copy per
-  refresh.  `lv.init(..., color_format=..., max_fps=...)` and
-  `driver.set_max_fps()` allow explicit control.
-- **FreeType glyph-cache hang** (#2): backported LVGL 9.2.0's per-node
-  `face_lock` into `tools/patch_lvgl.py`, serializing `FT_Face` access from
-  the LVGL render thread.  Verified on MaixCAM2 with 10/10 stress runs.
-- Version bumped to 0.1.1.
-
-## Binding fixes (2026-11)
-
-The binding generator and runtime were fixed after an API sweep on MaixCAM2:
-
-- `menu_page.set_page_title()` / `set_page_title_static()` (previously bound to
-  `menu` and freed a bogus pointer).
-- `image_decoder_t.delete()`, `scale_section_t.set_range()`,
-  `image_src_get_type()`, `image_decoder_create()`, `image_cache_resize()`,
-  `image_header_cache_resize()`, `image_cache_drop()` and
-  `canvas_buf_size()` are now module-level functions where the C API is not a
-  receiver method.
-- `lv.ANIM_ENABLE`, `lv.SCREEN_LOAD_ANIM` and `lv.SYMBOL` are exported.
-- `anim_set_exec_cb(anim, cb)` is provided at the `maix_lvgl` module level
-  (LVGL's `lv_anim_set_exec_cb` has no user_data slot, so the raw binding is
-  private). The callback is called as `cb(anim, value)`; use
-  `anim.set_custom_exec_cb()` for the same behaviour directly.
-- `grid_dsc_array` accepts lists as well as `array.array`.
-- `remove_event_cb()` / `remove_event_cb_with_user_data()` now match the
-  trampoline used by `add_event_cb`.
-- `observer.remove()` no longer leaves a dangling `LV_EVENT_DELETE` hook
-  (LVGL 9.1.0 upstream fix, applied by `tools/patch_lvgl.py`).
-- `canvas.copy_buf()` no longer hangs on same-format copies (same upstream
-  fix).
-- `obj.set_user_data()` / `timer.set_user_data()` / `anim.set_var()` /
-  `subject.init_pointer()` accept widget objects; plain Python ints remain
-  unsupported because LVGL stores a `void *`.
-- `font.set_kerning()` is not exposed: built-in Montserrat fonts are const
-  data and writing them crashes.
