@@ -646,25 +646,6 @@ points to it.
 Do not call the raw `lvgl.timer_handler()` unless you advance `lv_tick_inc()`
 yourself.
 
-## Verified
-
-- Wheel built through MaixCDK's `project.py`, installed on MaixCAM2
-  (MaixPy 4.12.5) from inside `maix_lvgl/`; 640×480 BGRA8888 rendering
-  confirmed by screenshot.
-- Touch indev: 25 read callbacks in 50 timer-handler passes; manual
-  `indev.read()` also wired correctly.
-- Earlier builds of the same backend: 74 consecutive `lv.EVENT.CLICKED`
-  hits, clean `lv.deinit()`.
-- Desktop Linux: built in `manylinux_2_28` (glibc 2.28), installed in WSL
-  with Python 3.13; `lv.init(800, 600)` created an 800×600 SDL window and ran
-  about 290 frames in 3 s.
-- Windows: `lvgl.cp313-win_amd64.pyd` cross-compiled with mingw-w64, links
-  `python313.dll` and `SDL2.dll`, exports `PyInit_lvgl`; not run on Windows
-  hardware yet.
-
-- 0.1.1 on MaixCAM2: FreeType stress test passed 10/10 runs (3 sizes,
-  Chinese labels); 640×480 ARGB8888 selftest screenshot correct.
-
 ## Known limitations
 
 - **JPEG images**: upstream jpegio depends on LVGL 9.5 image-cache internals

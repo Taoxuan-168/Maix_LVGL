@@ -623,22 +623,6 @@ B,G,R,A，与 `FMT_BGRA8888` 一致；显示驱动不接受 `FMT_RGB565`。
 
 不要直接调用原生 `lvgl.timer_handler()`，除非你自己推进 `lv.tick_inc()`。
 
-## 已验证
-
-- 通过 MaixCDK 的 `project.py` 构建 wheel，安装到 MaixCAM2（MaixPy 4.12.5）
-  后从 `maix_lvgl/` 包内加载扩展；640×480 BGRA8888 渲染截图正常。
-- 触摸 indev：50 次 timer_handler 触发 25 次 read 回调；手动 `indev.read()`
-  也正常。
-- 同一后端较早的构建：连续 74 次 `lv.EVENT.CLICKED` 命中、`lv.deinit()` 正常。
-- 桌面 Linux：在 `manylinux_2_28`（glibc 2.28）容器内构建，安装到 WSL 的
-  Python 3.13；`lv.init(800, 600)` 成功创建 800×600 SDL 窗口，3 秒运行约
-  290 帧。
-- Windows：`lvgl.cp313-win_amd64.pyd` 使用 mingw-w64 交叉编译，链接
-  `python313.dll` 和 `SDL2.dll`，导出 `PyInit_lvgl`；尚未在 Windows 实机运行。
-
-- 0.1.1 在 MaixCAM2 上：FreeType 压力测试连续 10 次全部通过（3 种字号、
-  中文标签）；640×480 ARGB8888 自检截图正常。
-
 ## 已知限制
 
 - **JPEG 图片**：上游 jpegio 依赖 LVGL 9.5 的 image-cache 内部结构，LVGL 9.1.0
